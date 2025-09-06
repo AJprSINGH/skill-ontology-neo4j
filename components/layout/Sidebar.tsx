@@ -10,7 +10,7 @@ import {
   Briefcase, 
   Brain,
   Search,
-  Network
+  Network as NetworkIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIndustries, useDepartments, useJobRoles } from '@/hooks/useApi';
@@ -82,7 +82,7 @@ export function Sidebar({
     <div className="w-80 bg-slate-900 text-white h-screen overflow-y-auto border-r border-slate-800">
       <div className="p-6">
         <div className="flex items-center gap-2 mb-8">
-          <Network className="w-8 h-8 text-blue-400" />
+          <NetworkIcon className="w-8 h-8 text-blue-400" />
           <h1 className="text-xl font-bold">Skill Ontology</h1>
         </div>
 

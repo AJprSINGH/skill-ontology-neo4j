@@ -2,10 +2,10 @@
 
 import { motion } from 'framer-motion';
 import { Building2, Users, Briefcase, Brain, Network } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { useJobRoleSkills } from '@/hooks/useApi';
 
 interface MainContentProps {
@@ -42,7 +42,7 @@ export function MainContent({ selectedEntity, entityType, onViewRelationships }:
             Skill Ontology Explorer
           </h2>
           <p className="text-gray-600 mb-6">
-            Navigate through the hierarchy using the sidebar to explore industries, 
+            Navigate through the hierarchy using the sidebar to explore industries,
             departments, job roles, and their associated skills.
           </p>
           <div className="grid grid-cols-2 gap-4 text-sm">

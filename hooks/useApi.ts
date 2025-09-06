@@ -45,6 +45,15 @@ export const useSkillSearch = (query: string) => {
   });
 };
 
+export const usePropertyBasedSearch = (query: string, filters: any) => {
+  return useQuery({
+    queryKey: ['property-search', query, filters],
+    queryFn: () => queryApi.propertyBasedSearch(query, filters),
+    enabled: query.length > 2,
+    staleTime: 5000,
+  });
+};
+
 export const useSkillPath = (fromSkillId: string | null, toSkillId: string | null) => {
   return useQuery({
     queryKey: ['skill-path', fromSkillId, toSkillId],

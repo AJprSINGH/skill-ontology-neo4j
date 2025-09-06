@@ -6,14 +6,16 @@ import { Search, Brain, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { useSkillSearch } from '@/hooks/useApi';
 import { SearchResult } from '@/types';
 
 interface SkillSearchProps {
   onSkillSelect: (skill: SearchResult) => void;
+  onSearch?: (query: string) => void;
 }
 
-export function SkillSearch({ onSkillSelect }: SkillSearchProps) {
+export function SkillSearch({ onSkillSelect, onSearch }: SkillSearchProps) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -39,6 +41,7 @@ export function SkillSearch({ onSkillSelect }: SkillSearchProps) {
 
   const handleInputChange = (value: string) => {
     setQuery(value);
+    onSearch?.(value);
     setIsOpen(value.length > 0);
   };
 
