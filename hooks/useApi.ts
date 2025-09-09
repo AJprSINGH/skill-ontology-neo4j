@@ -62,6 +62,14 @@ export const useSkillPath = (fromSkillId: string | null, toSkillId: string | nul
   });
 };
 
+export const useShortestPath = (sourceId: string | null, targetId: string | null, entityType: 'skill' | 'jobrole' = 'skill') => {
+  return useQuery({
+    queryKey: ['shortest-path', sourceId, targetId, entityType],
+    queryFn: () => queryApi.getShortestPath(sourceId!, targetId!, entityType),
+    enabled: !!sourceId && !!targetId && sourceId !== targetId,
+  });
+};
+
 export const useEntityRelationships = (entityType: string, entityId: string | null) => {
   return useQuery({
     queryKey: ['entity-relationships', entityType, entityId],
@@ -73,7 +81,7 @@ export const useEntityRelationships = (entityType: string, entityId: string | nu
 // Mutation hooks
 export const useCreateSkill = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (skill: Partial<Skill>) => crudApi.createSkill(skill),
     onSuccess: () => {
@@ -84,7 +92,7 @@ export const useCreateSkill = () => {
 
 export const useUpdateSkill = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: ({ skillId, skill }: { skillId: string; skill: Partial<Skill> }) =>
       crudApi.updateSkill(skillId, skill),
@@ -96,7 +104,7 @@ export const useUpdateSkill = () => {
 
 export const useDeleteSkill = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: (skillId: string) => crudApi.deleteSkill(skillId),
     onSuccess: () => {

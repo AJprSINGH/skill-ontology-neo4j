@@ -10,7 +10,7 @@ import { Filters, FilterState } from '@/components/ui/filters';
 import { SearchResults } from '@/components/ui/search-results';
 import { GraphVisualization } from '@/components/ui/graph-visualization';
 import { SearchResult } from '@/types';
-import { usePropertyBasedSearch } from '@/hooks/useApi';
+import { usePropertyBasedSearch, useShortestPath } from '@/hooks/useApi';
 
 export default function Home() {
   // Navigation state
@@ -34,11 +34,23 @@ export default function Home() {
   const [showGraphVisualization, setShowGraphVisualization] = useState(false);
   const [graphData, setGraphData] = useState<{ nodes: any[]; edges: any[] }>({ nodes: [], edges: [] });
 
+  // Pathfinding state
+  const [pathfindingSource, setPathfindingSource] = useState<string | null>(null);
+  const [pathfindingTarget, setPathfindingTarget] = useState<string | null>(null);
+
   // Search with filters
   const { data: searchResults = [], isLoading: searchLoading } = usePropertyBasedSearch(
     searchQuery, 
     filters
   );
+
+  // Shortest path query
+  const { data: shortestPath, isLoading: pathLoading } = useShortestPath(
+    pathfindingSource,
+    pathfindingTarget,
+    'skill'
+  );
+
   const handleEntitySelect = (type: 'industry' | 'department' | 'jobrole' | 'skill', entity: any) => {
     setSelectedEntity(entity);
     setSelectedEntityType(type);
@@ -80,6 +92,33 @@ export default function Home() {
     setGraphData({ nodes, edges });
     setShowGraphVisualization(true);
   };
+
+  const handlePathFind = (sourceId: string, targetId: string) => {
+    console.log(`🔍 Finding shortest path from ${sourceId} to ${targetId}`);
+    setPathfindingSource(sourceId);
+    setPathfindingTarget(targetId);
+    
+    // When path is found, visualize it in the graph
+    if (shortestPath && shortestPath.path.length > 0) {
+      const pathNodes = shortestPath.path.map((node, index) => ({
+        id: node.id,
+        label: node.title,
+        type: node.type,
+        color: index === 0 ? '#10B981' : index === shortestPath.path.length - 1 ? '#EF4444' : '#8B5CF6'
+      }));
+      
+      const pathEdges = shortestPath.path.slice(0, -1).map((node, index) => ({
+        id: `path-${index}`,
+        source: node.id,
+        target: shortestPath.path[index + 1].id,
+        label: 'path'
+      }));
+      
+      setGraphData({ nodes: pathNodes, edges: pathEdges });
+      setShowGraphVisualization(true);
+    }
+  };
+
   const handleViewRelationships = () => {
     if (selectedEntity) {
       handleVisualizeGraph(selectedEntity);
@@ -131,6 +170,7 @@ export default function Home() {
                   edges={graphData.edges}
                   onNodeClick={(node) => console.log('Node clicked:', node)}
                   onNodeExpand={(nodeId) => console.log('Node expand:', nodeId)}
+                  onPathFind={handlePathFind}
                   height={600}
                 />
               ) : showSearchResults ? (

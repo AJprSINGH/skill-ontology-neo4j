@@ -2,16 +2,18 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Building2, 
-  Users, 
-  Briefcase, 
-  Brain, 
-  Eye, 
-  Network, 
-  Grid3X3, 
+import {
+  Building2,
+  Users,
+  Briefcase,
+  Brain,
+  Eye,
+  Network,
+  Grid3X3,
   List,
-  Star
+  Star,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,14 +44,22 @@ const entityColors = {
   skill: 'bg-purple-100 text-purple-800 border-purple-200',
 };
 
-export function SearchResults({ 
-  results, 
-  isLoading, 
-  onViewDetails, 
+const ITEMS_PER_PAGE = 6;
+
+export function SearchResults({
+  results,
+  isLoading,
+  onViewDetails,
   onVisualizeGraph,
-  className 
+  className
 }: SearchResultsProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.ceil(results.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const currentResults = results.slice(startIndex, endIndex);
 
   if (isLoading) {
     return (
@@ -230,16 +240,58 @@ export function SearchResults({
       </div>
 
       {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {results.map((result, index) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {currentResults.map((result, index) => (
             <ResultCard key={result.id} result={result} index={index} />
           ))}
         </div>
       ) : (
         <div className="space-y-3">
-          {results.map((result, index) => (
+          {currentResults.map((result, index) => (
             <ListItem key={result.id} result={result} index={index} />
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6 pt-4 border-t">
+          <div className="text-sm text-gray-500">
+            Showing {startIndex + 1}-{Math.min(endIndex, results.length)} of {results.length} results
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              variant="outline"
+              size="sm"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <Button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  className="w-8 h-8 p-0"
+                >
+                  {page}
+                </Button>
+              ))}
+            </div>
+            <Button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              variant="outline"
+              size="sm"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       )}
     </div>
