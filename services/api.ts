@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import {
   demoIndustries,
   demoDepartments,
@@ -21,18 +21,58 @@ import {
   SkillPath
 } from '@/types';
 
+// API Configuration
+const API_CONFIG = {
+  BASE_URL: 'https://hp.triz.co.in/api',
+  TOKEN: '1078|LFXrQZWcwl5wl9lhhC5EyFNDvKLPHxF9NogOmtW652502ae5',
+  SUB_INSTITUTE_ID: '3',
+  TIMEOUT: 30000, // 30 seconds
+  MAX_RETRIES: 3,
+  RETRY_DELAY: 1000, // 1 second
+};
+
+// Error Types
+export enum ApiErrorType {
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  TIMEOUT_ERROR = 'TIMEOUT_ERROR',
+  AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  SERVER_ERROR = 'SERVER_ERROR',
+  NOT_FOUND_ERROR = 'NOT_FOUND_ERROR',
+  RATE_LIMIT_ERROR = 'RATE_LIMIT_ERROR',
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+}
+
+export interface ApiError {
+  type: ApiErrorType;
+  message: string;
+  statusCode?: number;
+  originalError?: any;
+  retryable: boolean;
+}
+
 // Logging utility for graph traversal queries
-const logGraphQuery = (operation: string, params: any, result?: any) => {
+const logGraphQuery = (operation: string, params: any, result?: any, error?: ApiError) => {
   const timestamp = new Date().toISOString();
   const logEntry = {
     timestamp,
     operation,
     params,
-    result: result ? { count: Array.isArray(result) ? result.length : 1 } : undefined
+    result: result ? {
+      count: Array.isArray(result) ? result.length : 1,
+      success: true
+    } : undefined,
+    error: error ? {
+      type: error.type,
+      message: error.message,
+      statusCode: error.statusCode,
+      retryable: error.retryable
+    } : undefined
   };
+
   console.log('🔍 Graph Query:', logEntry);
 
-  // Store in localStorage for debugging (optional)
+  // Store in localStorage for debugging
   try {
     const logs = JSON.parse(localStorage.getItem('graphQueryLogs') || '[]');
     logs.push(logEntry);
@@ -46,157 +86,419 @@ const logGraphQuery = (operation: string, params: any, result?: any) => {
   }
 };
 
+// Response validation utilities
+const validateResponse = (data: any, expectedFields: string[] = []): boolean => {
+  if (!data) return false;
+
+  // Check if it's an array and has items
+  if (Array.isArray(data)) {
+    if (data.length === 0) return true; // Empty arrays are valid
+    // Validate first item has expected fields
+    const firstItem = data[0];
+    return expectedFields.every(field => firstItem.hasOwnProperty(field));
+  }
+
+  // Check if object has expected fields
+  return expectedFields.every(field => data.hasOwnProperty(field));
+};
+
+// Error classification utility
+const classifyError = (error: any): ApiError => {
+  if (axios.isAxiosError(error)) {
+    const axiosError = error as AxiosError;
+
+    if (axiosError.code === 'ECONNABORTED' || axiosError.message.includes('timeout')) {
+      return {
+        type: ApiErrorType.TIMEOUT_ERROR,
+        message: 'Request timed out. Please try again.',
+        statusCode: 408,
+        originalError: error,
+        retryable: true
+      };
+    }
+
+    if (!axiosError.response) {
+      return {
+        type: ApiErrorType.NETWORK_ERROR,
+        message: 'Network error. Please check your connection.',
+        originalError: error,
+        retryable: true
+      };
+    }
+
+    const status = axiosError.response.status;
+
+    switch (status) {
+      case 401:
+      case 403:
+        return {
+          type: ApiErrorType.AUTHENTICATION_ERROR,
+          message: 'Authentication failed. Please check your credentials.',
+          statusCode: status,
+          originalError: error,
+          retryable: false
+        };
+      case 404:
+        return {
+          type: ApiErrorType.NOT_FOUND_ERROR,
+          message: 'Resource not found.',
+          statusCode: status,
+          originalError: error,
+          retryable: false
+        };
+      case 422:
+        return {
+          type: ApiErrorType.VALIDATION_ERROR,
+          message: 'Invalid data provided.',
+          statusCode: status,
+          originalError: error,
+          retryable: false
+        };
+      case 429:
+        return {
+          type: ApiErrorType.RATE_LIMIT_ERROR,
+          message: 'Too many requests. Please wait and try again.',
+          statusCode: status,
+          originalError: error,
+          retryable: true
+        };
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        return {
+          type: ApiErrorType.SERVER_ERROR,
+          message: 'Server error. Please try again later.',
+          statusCode: status,
+          originalError: error,
+          retryable: true
+        };
+      default:
+        return {
+          type: ApiErrorType.UNKNOWN_ERROR,
+          message: `Unexpected error (${status}). Please try again.`,
+          statusCode: status,
+          originalError: error,
+          retryable: true
+        };
+    }
+  }
+
+  return {
+    type: ApiErrorType.UNKNOWN_ERROR,
+    message: 'An unexpected error occurred.',
+    originalError: error,
+    retryable: false
+  };
+};
+
+// Retry utility with exponential backoff
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const retryWithBackoff = async <T>(
+  operation: () => Promise<T>,
+  maxRetries: number = API_CONFIG.MAX_RETRIES,
+  baseDelay: number = API_CONFIG.RETRY_DELAY
+): Promise<T> => {
+  let lastError: ApiError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = classifyError(error);
+
+      // Don't retry non-retryable errors
+      if (!lastError.retryable || attempt === maxRetries) {
+        throw lastError;
+      }
+
+      // Exponential backoff with jitter
+      const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
+      console.warn(`🔄 Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms:`, lastError.message);
+      await sleep(delay);
+    }
+  }
+
+  throw lastError!;
+};
+
 class ApiClient {
   private client: AxiosInstance;
 
   constructor() {
     this.client = axios.create({
-      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://dev.triz.co.in',
+      baseURL: API_CONFIG.BASE_URL,
+      timeout: API_CONFIG.TIMEOUT,
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
     });
 
-    // Demo mode - no authentication required
+    // Request interceptor
+    this.client.interceptors.request.use(
+      (config) => {
+        // Add token to all requests
+        config.params = {
+          ...config.params,
+          token: API_CONFIG.TOKEN
+        };
+
+        console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+          params: config.params,
+          data: config.data
+        });
+
+        return config;
+      },
+      (error) => {
+        console.error('❌ Request Error:', error);
+        return Promise.reject(error);
+      }
+    );
+
+    // Response interceptor
+    this.client.interceptors.response.use(
+      (response) => {
+        console.log(`✅ API Response: ${response.config.url}`, {
+          status: response.status,
+          dataType: Array.isArray(response.data) ? 'array' : typeof response.data,
+          count: Array.isArray(response.data) ? response.data.length : 1
+        });
+        return response;
+      },
+      (error) => {
+        const apiError = classifyError(error);
+        console.error(`❌ API Error: ${error.config?.url}`, apiError);
+        return Promise.reject(apiError);
+      }
+    );
   }
 
-  // Query endpoints
+  // Industries API
   async getIndustries(): Promise<Industry[]> {
+    const operation = 'getIndustries';
+    const params = {};
+
     try {
-      logGraphQuery('getIndustries', {});
-      const response = await this.client.get<ApiResponse<Industry[]>>('/api/industries');
-      // If API returns data, use it; otherwise fall back to demo data
-      const result = response.data.data && response.data.data.length > 0
-        ? response.data.data
-        : demoIndustries;
-      logGraphQuery('getIndustries', {}, result);
+      const result = await retryWithBackoff(async () => {
+        const response = await this.client.get('/industries');
+
+        // Validate response structure
+        if (!validateResponse(response.data, ['id', 'title'])) {
+          throw new Error('Invalid response structure for industries');
+        }
+
+        return response.data.map((item: any) => ({
+          id: item.id || item.industry_id || String(item.id),
+          title: item.title || item.name || item.industry_name || 'Unknown Industry',
+          description: item.description || item.desc || '',
+          category: item.category || item.type || 'General',
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString()
+        }));
+      });
+
+      logGraphQuery(operation, params, result);
       return result;
     } catch (error) {
-      console.log('API not available, using demo data');
-      logGraphQuery('getIndustries', {}, demoIndustries);
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+
+      console.warn('🔄 Falling back to demo data for industries');
       return demoIndustries;
     }
   }
 
+  // Departments API
   async getDepartments(industryId: string): Promise<Department[]> {
+    const operation = 'getDepartments';
+    const params = { industryId };
+
     try {
-      logGraphQuery('getDepartments', { industryId });
-      const response = await this.client.get<ApiResponse<Department[]>>(
-        `/api/industry/${industryId}/departments`
-      );
-      // If API returns data, use it; otherwise fall back to demo data
-      const result = response.data.data && response.data.data.length > 0
-        ? response.data.data
-        : demoDepartments[industryId] || [];
-      logGraphQuery('getDepartments', { industryId }, result);
+      const result = await retryWithBackoff(async () => {
+        const response = await this.client.get(`/industry/${encodeURIComponent(industryId)}/departments`);
+
+        if (!validateResponse(response.data, ['id', 'title'])) {
+          throw new Error('Invalid response structure for departments');
+        }
+
+        return response.data.map((item: any) => ({
+          id: item.id || item.department_id || String(item.id),
+          title: item.title || item.name || item.department_name || 'Unknown Department',
+          description: item.description || item.desc || '',
+          category: item.category || item.type || 'General',
+          industry_id: industryId,
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString()
+        }));
+      });
+
+      logGraphQuery(operation, params, result);
       return result;
     } catch (error) {
-      console.log('API not available, using demo data');
-      const result = demoDepartments[industryId] || [];
-      logGraphQuery('getDepartments', { industryId }, result);
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+
+      console.warn(`🔄 Falling back to demo data for departments (industry: ${industryId})`);
       return demoDepartments[industryId] || [];
     }
   }
 
+  // Job Roles API
   async getJobRoles(departmentId: string): Promise<JobRole[]> {
+    const operation = 'getJobRoles';
+    const params = { departmentId };
+
     try {
-      logGraphQuery('getJobRoles', { departmentId });
-      const response = await this.client.get<ApiResponse<JobRole[]>>(
-        `/api/department/${departmentId}/jobroles`
-      );
-      // If API returns data, use it; otherwise fall back to demo data
-      const result = response.data.data && response.data.data.length > 0
-        ? response.data.data
-        : demoJobRoles[departmentId] || [];
-      logGraphQuery('getJobRoles', { departmentId }, result);
+      const result = await retryWithBackoff(async () => {
+        const response = await this.client.get(`/department/${encodeURIComponent(departmentId)}/jobroles`);
+
+        if (!validateResponse(response.data, ['id', 'title'])) {
+          throw new Error('Invalid response structure for job roles');
+        }
+
+        return response.data.map((item: any) => ({
+          id: item.id || item.jobrole_id || item.job_role_id || String(item.id),
+          title: item.title || item.name || item.job_title || item.role_name || 'Unknown Role',
+          description: item.description || item.desc || item.job_description || '',
+          category: item.category || item.type || item.job_category || 'General',
+          department_id: departmentId,
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString()
+        }));
+      });
+
+      logGraphQuery(operation, params, result);
       return result;
     } catch (error) {
-      console.log('API not available, using demo data');
-      const result = demoJobRoles[departmentId] || [];
-      logGraphQuery('getJobRoles', { departmentId }, result);
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+
+      console.warn(`🔄 Falling back to demo data for job roles (department: ${departmentId})`);
       return demoJobRoles[departmentId] || [];
     }
   }
 
+  // Job Role Skills API
   async getJobRoleSkills(jobroleId: string): Promise<Skill[]> {
+    const operation = 'getJobRoleSkills';
+    const params = { jobroleId, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
+
     try {
-      logGraphQuery('getJobRoleSkills', { jobroleId });
-      const response = await this.client.get<ApiResponse<Skill[]>>(
-        `/api/jobrole/${jobroleId}/skills`
-      );
-      // If API returns data, use it; otherwise fall back to demo data
-      const result = response.data.data && response.data.data.length > 0
-        ? response.data.data
-        : demoSkills[jobroleId] || [];
-      logGraphQuery('getJobRoleSkills', { jobroleId }, result);
+      const result = await retryWithBackoff(async () => {
+        const response = await this.client.get(`/jobrole/${encodeURIComponent(jobroleId)}/skills`, {
+          params: { sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID }
+        });
+
+        if (!validateResponse(response.data, ['id', 'title'])) {
+          throw new Error('Invalid response structure for job role skills');
+        }
+
+        return response.data.map((item: any) => ({
+          id: item.id || item.skill_id || String(item.id),
+          title: item.title || item.name || item.skill_name || 'Unknown Skill',
+          description: item.description || item.desc || item.skill_description || '',
+          category: item.category || item.skill_category || item.type || 'General',
+          level: item.level || item.proficiency_level || item.skill_level || 'Intermediate',
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString()
+        }));
+      });
+
+      logGraphQuery(operation, params, result);
       return result;
     } catch (error) {
-      console.log('API not available, using demo data');
-      const result = demoSkills[jobroleId] || [];
-      logGraphQuery('getJobRoleSkills', { jobroleId }, result);
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+
+      console.warn(`🔄 Falling back to demo data for job role skills (jobrole: ${jobroleId})`);
       return demoSkills[jobroleId] || [];
     }
   }
 
+  // Skills Search API
   async searchSkills(query: string): Promise<SearchResult[]> {
+    const operation = 'searchSkills';
+    const params = { query, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
+
     try {
-      logGraphQuery('searchSkills', { query });
-      const response = await this.client.get<ApiResponse<SearchResult[]>>(
-        `/api/skills/search?query=${encodeURIComponent(query)}`
-      );
-      // If API returns data, use it; otherwise filter demo data
-      if (response.data.data && response.data.data.length > 0) {
-        logGraphQuery('searchSkills', { query }, response.data.data);
-        return response.data.data;
-      } else {
-        // Filter demo search results based on query
-        const result = demoSearchResults.filter(skill =>
-          skill.title.toLowerCase().includes(query.toLowerCase()) ||
-          skill.description.toLowerCase().includes(query.toLowerCase())
-        );
-        logGraphQuery('searchSkills', { query }, result);
-        return result;
-      }
+      const result = await retryWithBackoff(async () => {
+        const response = await this.client.get('/skills/search', {
+          params: {
+            query: encodeURIComponent(query),
+            sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID
+          }
+        });
+
+        if (!validateResponse(response.data, ['id', 'title'])) {
+          throw new Error('Invalid response structure for skill search');
+        }
+
+        return response.data.map((item: any) => ({
+          id: item.id || item.skill_id || String(item.id),
+          title: item.title || item.name || item.skill_name || 'Unknown Skill',
+          description: item.description || item.desc || item.skill_description || '',
+          category: item.category || item.skill_category || item.type || 'General',
+          relevance_score: item.relevance_score || item.score || Math.random()
+        }));
+      });
+
+      logGraphQuery(operation, params, result);
+      return result;
     } catch (error) {
-      console.log('API not available, using demo data');
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+
+      console.warn(`🔄 Falling back to demo data for skill search (query: ${query})`);
       // Filter demo search results based on query
-      const result = demoSearchResults.filter(skill =>
+      const filteredResults = demoSearchResults.filter(skill =>
         skill.title.toLowerCase().includes(query.toLowerCase()) ||
         skill.description.toLowerCase().includes(query.toLowerCase())
       );
-      logGraphQuery('searchSkills', { query }, result);
-      return result;
+      return filteredResults;
     }
   }
 
+  // Property-based Search API
   async propertyBasedSearch(query: string, filters: any): Promise<SearchResult[]> {
+    const operation = 'propertyBasedSearch';
+    const params = { query, filters, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
+
     try {
-      logGraphQuery('propertyBasedSearch', { query, filters });
-      const params = new URLSearchParams();
-      params.append('query', query);
-      if (filters.industry) params.append('industry', filters.industry);
-      if (filters.department) params.append('department', filters.department);
-      if (filters.jobrole) params.append('jobrole', filters.jobrole);
+      const result = await retryWithBackoff(async () => {
+        const searchParams = new URLSearchParams();
+        searchParams.append('query', query);
+        searchParams.append('sub_institute_id', API_CONFIG.SUB_INSTITUTE_ID);
 
-      const response = await this.client.get<ApiResponse<SearchResult[]>>(
-        `/api/search?${params.toString()}`
-      );
+        if (filters.industry) searchParams.append('industry', filters.industry);
+        if (filters.department) searchParams.append('department', filters.department);
+        if (filters.jobrole) searchParams.append('jobrole', filters.jobrole);
 
-      // If API returns data, use it; otherwise filter demo data
-      if (response.data.data && response.data.data.length > 0) {
-        logGraphQuery('propertyBasedSearch', { query, filters }, response.data.data);
-        return response.data.data;
-      } else {
-        // Filter demo search results based on query and filters
-        const result = this.filterDemoResults(query, filters);
-        logGraphQuery('propertyBasedSearch', { query, filters }, result);
-        return result;
-      }
-    } catch (error) {
-      console.log('API not available, using demo data');
-      const result = this.filterDemoResults(query, filters);
-      logGraphQuery('propertyBasedSearch', { query, filters }, result);
+        const response = await this.client.get(`/search?${searchParams.toString()}`);
+
+        if (!validateResponse(response.data, ['id', 'title'])) {
+          throw new Error('Invalid response structure for property-based search');
+        }
+
+        return response.data.map((item: any) => ({
+          id: item.id || String(item.id),
+          title: item.title || item.name || 'Unknown Item',
+          description: item.description || item.desc || '',
+          category: item.category || item.type || 'General',
+          relevance_score: item.relevance_score || item.score || Math.random()
+        }));
+      });
+
+      logGraphQuery(operation, params, result);
       return result;
+    } catch (error) {
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+
+      console.warn('🔄 Falling back to demo data for property-based search');
+      return this.filterDemoResults(query, filters);
     }
   }
 
@@ -213,53 +515,56 @@ class ApiClient {
 
     // Apply filters (simplified for demo)
     if (filters.industry || filters.department || filters.jobrole) {
-      // In a real implementation, this would filter based on actual relationships
-      // For demo, we'll just return filtered results
       results = results.slice(0, Math.max(1, results.length - 2));
     }
 
     return results;
   }
 
+  // Skill Path API (Legacy - keeping for backward compatibility)
   async getSkillPath(fromSkillId: string, toSkillId: string): Promise<SkillPath> {
-    try {
-      logGraphQuery('getSkillPath', { fromSkillId, toSkillId });
-      const response = await this.client.get<ApiResponse<SkillPath>>(
-        `/api/skills/path?from=${fromSkillId}&to=${toSkillId}`
-      );
-      // If API returns data, use it; otherwise return demo path
-      const result = response.data.data || demoSkillPath;
-      logGraphQuery('getSkillPath', { fromSkillId, toSkillId }, result);
-      return result;
-    } catch (error) {
-      console.log('API not available, using demo data');
-      logGraphQuery('getSkillPath', { fromSkillId, toSkillId }, demoSkillPath);
-      return demoSkillPath;
-    }
+    return this.getShortestPath(fromSkillId, toSkillId, 'skill');
   }
 
-  // New shortest path API
+  // Shortest Path API
   async getShortestPath(sourceId: string, targetId: string, entityType: 'skill' | 'jobrole' = 'skill'): Promise<SkillPath> {
-    try {
-      logGraphQuery('getShortestPath', { sourceId, targetId, entityType });
-      const response = await this.client.get<ApiResponse<SkillPath>>(
-        `/api/graph/shortest-path?source=${sourceId}&target=${targetId}&type=${entityType}`
-      );
+    const operation = 'getShortestPath';
+    const params = { sourceId, targetId, entityType, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
 
-      if (response.data.data) {
-        logGraphQuery('getShortestPath', { sourceId, targetId, entityType }, response.data.data);
-        return response.data.data;
-      } else {
-        // Generate demo shortest path
-        const demoPath = this.generateDemoShortestPath(sourceId, targetId, entityType);
-        logGraphQuery('getShortestPath', { sourceId, targetId, entityType }, demoPath);
-        return demoPath;
-      }
+    try {
+      const result = await retryWithBackoff(async () => {
+        const response = await this.client.get('/graph/shortest-path', {
+          params: {
+            source: sourceId,
+            target: targetId,
+            type: entityType,
+            sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID
+          }
+        });
+
+        // Validate path structure
+        if (!response.data || !Array.isArray(response.data.path)) {
+          throw new Error('Invalid response structure for shortest path');
+        }
+
+        return {
+          path: response.data.path.map((node: any) => ({
+            id: node.id || String(node.id),
+            title: node.title || node.name || 'Unknown Node',
+            type: node.type || entityType
+          })),
+          distance: response.data.distance || response.data.path.length - 1
+        };
+      });
+
+      logGraphQuery(operation, params, result);
+      return result;
     } catch (error) {
-      console.log('API not available, using demo data');
-      const demoPath = this.generateDemoShortestPath(sourceId, targetId, entityType);
-      logGraphQuery('getShortestPath', { sourceId, targetId, entityType }, demoPath);
-      return demoPath;
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+
+      console.warn('🔄 Falling back to demo data for shortest path');
+      return this.generateDemoShortestPath(sourceId, targetId, entityType);
     }
   }
 
@@ -280,7 +585,7 @@ class ApiClient {
     // Create a simple path with intermediate nodes
     const path = [
       { id: sourceId, title: sourceNode.title, type: entityType },
-      { id: 'intermediate-1', title: 'Intermediate Skill', type: 'skill' },
+      { id: 'intermediate-1', title: 'Intermediate Node', type: 'skill' },
       { id: targetId, title: targetNode.title, type: entityType }
     ];
 
@@ -290,43 +595,167 @@ class ApiClient {
     };
   }
 
-  // CRUD endpoints
+  // CRUD Operations with Enhanced Error Handling
+
+  // Create Skill
   async createSkill(skill: Partial<Skill>): Promise<Skill> {
-    const response = await this.client.post<ApiResponse<Skill>>('/api/skills', skill);
-    return response.data.data;
+    const operation = 'createSkill';
+    const params = { skill, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
+
+    try {
+      const result = await retryWithBackoff(async () => {
+        const response = await this.client.post('/skills', {
+          ...skill,
+          sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID,
+          type: 'API'
+        });
+
+        if (!validateResponse(response.data, ['id', 'title'])) {
+          throw new Error('Invalid response structure for create skill');
+        }
+
+        return {
+          id: response.data.id || String(response.data.id),
+          title: response.data.title || response.data.name || 'New Skill',
+          description: response.data.description || '',
+          category: response.data.category || 'General',
+          level: response.data.level || response.data.proficiency_level || 'Intermediate',
+          created_at: response.data.created_at || new Date().toISOString(),
+          updated_at: response.data.updated_at || new Date().toISOString()
+        };
+      });
+
+      logGraphQuery(operation, params, result);
+      return result;
+    } catch (error) {
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+      throw apiError;
+    }
   }
 
+  // Update Skill
   async updateSkill(skillId: string, skill: Partial<Skill>): Promise<Skill> {
-    const response = await this.client.put<ApiResponse<Skill>>(`/api/skills/${skillId}`, skill);
-    return response.data.data;
+    const operation = 'updateSkill';
+    const params = { skillId, skill, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
+
+    try {
+      const result = await retryWithBackoff(async () => {
+        const response = await this.client.put(`/skills/${skillId}`, {
+          ...skill,
+          sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID,
+          type: 'API'
+        });
+
+        if (!validateResponse(response.data, ['id', 'title'])) {
+          throw new Error('Invalid response structure for update skill');
+        }
+
+        return {
+          id: response.data.id || skillId,
+          title: response.data.title || response.data.name || 'Updated Skill',
+          description: response.data.description || '',
+          category: response.data.category || 'General',
+          level: response.data.level || response.data.proficiency_level || 'Intermediate',
+          created_at: response.data.created_at || new Date().toISOString(),
+          updated_at: response.data.updated_at || new Date().toISOString()
+        };
+      });
+
+      logGraphQuery(operation, params, result);
+      return result;
+    } catch (error) {
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+      throw apiError;
+    }
   }
 
+  // Delete Skill
   async deleteSkill(skillId: string): Promise<void> {
-    await this.client.delete(`/api/skills/${skillId}`);
+    const operation = 'deleteSkill';
+    const params = { skillId, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
+
+    try {
+      await retryWithBackoff(async () => {
+        await this.client.delete(`/skills/${skillId}`, {
+          params: {
+            sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID,
+            type: 'API'
+          }
+        });
+      });
+
+      logGraphQuery(operation, params, { success: true });
+    } catch (error) {
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+      throw apiError;
+    }
   }
 
+  // Additional CRUD operations
   async addSkillToJobRole(jobroleId: string, skillId: string): Promise<void> {
-    await this.client.post(`/api/jobrole/${jobroleId}/skills`, { skill_id: skillId });
+    const operation = 'addSkillToJobRole';
+    const params = { jobroleId, skillId, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
+
+    try {
+      await retryWithBackoff(async () => {
+        await this.client.post(`/jobrole/${jobroleId}/skills`, {
+          skill_id: skillId,
+          sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID
+        });
+      });
+
+      logGraphQuery(operation, params, { success: true });
+    } catch (error) {
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+      throw apiError;
+    }
   }
 
   async addClassificationToSkill(skillId: string, classificationId: string): Promise<void> {
-    await this.client.post(`/api/skill/${skillId}/classification`, {
-      classification_id: classificationId,
-    });
+    const operation = 'addClassificationToSkill';
+    const params = { skillId, classificationId, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
+
+    try {
+      await retryWithBackoff(async () => {
+        await this.client.post(`/skill/${skillId}/classification`, {
+          classification_id: classificationId,
+          sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID
+        });
+      });
+
+      logGraphQuery(operation, params, { success: true });
+    } catch (error) {
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+      throw apiError;
+    }
   }
 
   // Get entity relationships
   async getEntityRelationships(entityType: string, entityId: string): Promise<any> {
+    const operation = 'getEntityRelationships';
+    const params = { entityType, entityId, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
+
     try {
-      logGraphQuery('getEntityRelationships', { entityType, entityId });
-      const response = await this.client.get(`/api/${entityType}/${entityId}/relationships`);
-      // If API returns data, use it; otherwise return demo relationships
-      const result = response.data.data || demoRelationships;
-      logGraphQuery('getEntityRelationships', { entityType, entityId }, result);
+      const result = await retryWithBackoff(async () => {
+        const response = await this.client.get(`/${entityType}/${entityId}/relationships`, {
+          params: { sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID }
+        });
+
+        return response.data || demoRelationships;
+      });
+
+      logGraphQuery(operation, params, result);
       return result;
     } catch (error) {
-      console.log('API not available, using demo data');
-      logGraphQuery('getEntityRelationships', { entityType, entityId }, demoRelationships);
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+
+      console.warn('🔄 Falling back to demo data for entity relationships');
       return demoRelationships;
     }
   }
@@ -353,3 +782,6 @@ export const crudApi = {
   addSkillToJobRole: api.addSkillToJobRole.bind(api),
   addClassificationToSkill: api.addClassificationToSkill.bind(api),
 };
+
+// Export error types for use in components
+//export { ApiError };

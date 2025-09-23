@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useJobRoleSkills } from '@/hooks/useApi';
+import { LoadingSpinner, LoadingCard } from '@/components/ui/loading-spinner';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 interface MainContentProps {
   selectedEntity: any;
@@ -29,7 +31,7 @@ const entityColors = {
 };
 
 export function MainContent({ selectedEntity, entityType, onViewRelationships }: MainContentProps) {
-  const { data: skills = [] } = useJobRoleSkills(
+  const { data: skills = [], isLoading: skillsLoading, error: skillsError } = useJobRoleSkills(
     entityType === 'jobrole' ? selectedEntity?.id : null
   );
 
@@ -71,91 +73,114 @@ export function MainContent({ selectedEntity, entityType, onViewRelationships }:
   const IconComponent = entityIcons[entityType];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="p-8 space-y-6"
-    >
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className={cn(
-                "w-12 h-12 rounded-xl flex items-center justify-center",
-                entityColors[entityType]
-              )}>
-                <IconComponent className="w-6 h-6" />
+    <ErrorBoundary>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="p-8 space-y-6"
+      >
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className={cn(
+                  "w-12 h-12 rounded-xl flex items-center justify-center",
+                  entityColors[entityType]
+                )}>
+                  <IconComponent className="w-6 h-6" />
+                </div>
+                <div>
+                  <CardTitle className="text-2xl">{selectedEntity.title}</CardTitle>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="secondary">
+                      {entityType.charAt(0).toUpperCase() + entityType.slice(1)}
+                    </Badge>
+                    {selectedEntity.category && (
+                      <Badge variant="outline">{selectedEntity.category}</Badge>
+                    )}
+                  </div>
+                </div>
               </div>
+              <Button onClick={onViewRelationships} variant="outline">
+                <Network className="w-4 h-4 mr-2" />
+                View Relationships
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {selectedEntity.description && (
+              <div className="mb-6">
+                <h3 className="font-semibold mb-2">Description</h3>
+                <p className="text-gray-600 leading-relaxed">{selectedEntity.description}</p>
+              </div>
+            )}
+
+            <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <CardTitle className="text-2xl">{selectedEntity.title}</CardTitle>
-                <div className="flex items-center gap-2 mt-2">
-                  <Badge variant="secondary">
-                    {entityType.charAt(0).toUpperCase() + entityType.slice(1)}
-                  </Badge>
-                  {selectedEntity.category && (
-                    <Badge variant="outline">{selectedEntity.category}</Badge>
+                <h3 className="font-semibold mb-3">Properties</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">ID:</span>
+                    <span className="font-mono">{selectedEntity.id}</span>
+                  </div>
+                  {selectedEntity.level && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Level:</span>
+                      <span>{selectedEntity.level}</span>
+                    </div>
+                  )}
+                  {selectedEntity.created_at && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Created:</span>
+                      <span>{new Date(selectedEntity.created_at).toLocaleDateString()}</span>
+                    </div>
                   )}
                 </div>
               </div>
-            </div>
-            <Button onClick={onViewRelationships} variant="outline">
-              <Network className="w-4 h-4 mr-2" />
-              View Relationships
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {selectedEntity.description && (
-            <div className="mb-6">
-              <h3 className="font-semibold mb-2">Description</h3>
-              <p className="text-gray-600 leading-relaxed">{selectedEntity.description}</p>
-            </div>
-          )}
 
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="font-semibold mb-3">Properties</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">ID:</span>
-                  <span className="font-mono">{selectedEntity.id}</span>
-                </div>
-                {selectedEntity.level && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Level:</span>
-                    <span>{selectedEntity.level}</span>
-                  </div>
-                )}
-                {selectedEntity.created_at && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Created:</span>
-                    <span>{new Date(selectedEntity.created_at).toLocaleDateString()}</span>
-                  </div>
-                )}
-              </div>
-            </div>
+              {entityType === 'jobrole' && (
+                <div>
+                  <h3 className="font-semibold mb-3">
+                    Required Skills
+                    {!skillsLoading && !skillsError && ` (${skills.length})`}
+                  </h3>
 
-            {entityType === 'jobrole' && skills.length > 0 && (
-              <div>
-                <h3 className="font-semibold mb-3">Required Skills ({skills.length})</h3>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {skills.map((skill) => (
-                    <div key={skill.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
-                      <Brain className="w-4 h-4 text-purple-500" />
-                      <span className="text-sm font-medium">{skill.title}</span>
-                      {skill.category && (
-                        <Badge variant="outline" className="text-xs ml-auto">
-                          {skill.category}
-                        </Badge>
-                      )}
+                  {skillsLoading ? (
+                    <div className="space-y-2">
+                      <LoadingSpinner size="sm" text="Loading skills..." />
+                      {[...Array(3)].map((_, i) => (
+                        <div key={i} className="h-10 bg-gray-100 rounded-md animate-pulse" />
+                      ))}
                     </div>
-                  ))}
+                  ) : skillsError ? (
+                    <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
+                      Failed to load skills. Please try again.
+                    </div>
+                  ) : skills.length === 0 ? (
+                    <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-md">
+                      No skills found for this job role.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {skills.map((skill) => (
+                        <div key={skill.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
+                          <Brain className="w-4 h-4 text-purple-500" />
+                          <span className="text-sm font-medium">{skill.title}</span>
+                          {skill.category && (
+                            <Badge variant="outline" className="text-xs ml-auto">
+                              {skill.category}
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </ErrorBoundary>
   );
 }

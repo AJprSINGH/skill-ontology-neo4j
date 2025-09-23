@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useSkillSearch } from '@/hooks/useApi';
 import { SearchResult } from '@/types';
+import { LoadingSpinner } from '@/components/ui/loading-spinner';
 
 interface SkillSearchProps {
   onSkillSelect: (skill: SearchResult) => void;
@@ -21,14 +22,14 @@ export function SkillSearch({ onSkillSelect, onSearch }: SkillSearchProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { data: searchResults = [], isLoading, isFetching } = useSkillSearch(query);
+  const { data: searchResults = [], isLoading, isFetching, error } = useSkillSearch(query);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        dropdownRef.current && 
+        dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node) &&
-        inputRef.current && 
+        inputRef.current &&
         !inputRef.current.contains(event.target as Node)
       ) {
         setIsOpen(false);
@@ -86,7 +87,15 @@ export function SkillSearch({ onSkillSelect, onSearch }: SkillSearchProps) {
             exit={{ opacity: 0, y: -10 }}
             className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
           >
-            {searchResults.length > 0 ? (
+            {isLoading ? (
+              <div className="p-4 text-center">
+                <LoadingSpinner size="sm" text="Searching..." />
+              </div>
+            ) : error ? (
+              <div className="p-4 text-center text-red-600 text-sm">
+                Search failed. Please try again.
+              </div>
+            ) : searchResults.length > 0 ? (
               <div className="py-2">
                 <div className="px-3 py-2 text-xs text-gray-500 font-medium border-b border-gray-100">
                   {searchResults.length} skill{searchResults.length !== 1 ? 's' : ''} found
@@ -95,8 +104,8 @@ export function SkillSearch({ onSkillSelect, onSearch }: SkillSearchProps) {
                   <motion.button
                     key={skill.id}
                     initial={{ opacity: 0, x: -20 }}
-                    animate={{ 
-                      opacity: 1, 
+                    animate={{
+                      opacity: 1,
                       x: 0,
                       transition: { delay: index * 0.05 }
                     }}
@@ -131,7 +140,7 @@ export function SkillSearch({ onSkillSelect, onSearch }: SkillSearchProps) {
                   </motion.button>
                 ))}
               </div>
-            ) : !isLoading && !isFetching && query.length > 2 ? (
+            ) : query.length > 2 ? (
               <div className="py-8 px-4 text-center text-gray-500">
                 <Brain className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                 <p>No skills found for "{query}"</p>
