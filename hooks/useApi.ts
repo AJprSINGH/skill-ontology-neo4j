@@ -5,7 +5,7 @@ import { queryApi, crudApi, ApiError, ApiErrorType } from '@/services/api';
 import { Skill } from '@/types';
 import { toast } from 'sonner';
 
-// Enhanced error handling utility
+
 const handleApiError = (error: ApiError, operation: string) => {
   console.error(`❌ ${operation} failed:`, error);
 
