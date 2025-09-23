@@ -147,7 +147,7 @@ const getMutationConfig = (operation: string, successMessage: string) => ({
   onError: (error: ApiError) => handleApiError(error, operation),
 });
 
-// Mutation hooks
+
 export const useCreateSkill = () => {
   const queryClient = useQueryClient();
 
