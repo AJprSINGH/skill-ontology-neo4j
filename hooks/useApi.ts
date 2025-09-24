@@ -44,6 +44,7 @@ const handleApiError = (error: ApiError, operation: string) => {
 };
 
 // Enhanced query configuration
+// Updated commit
 const getQueryConfig = (operation: string) => ({
   staleTime: 5 * 60 * 1000, // 5 minutes
   retry: (failureCount: number, error: any) => {
