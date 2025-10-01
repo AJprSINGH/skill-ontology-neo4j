@@ -64,9 +64,9 @@ export function Sidebar({
   };
 
   const handleIndustryClick = (industry: any) => {
-    onIndustrySelect(industry.id);
+    onIndustrySelect(industry.slug);
     onEntitySelect('industry', industry);
-    toggleIndustry(industry.id);
+    toggleIndustry(industry.slug);
   };
 
   const handleDepartmentClick = (department: any) => {
@@ -117,16 +117,16 @@ export function Sidebar({
               <ErrorState message="No industries found" />
             ) : (
               industries.map((industry) => (
-                <div key={industry.id} className="space-y-1">
+                <div key={industry.slug} className="space-y-1">
                   <button
                     onClick={() => handleIndustryClick(industry)}
                     className={cn(
                       "w-full flex items-center gap-2 p-2 text-sm rounded-lg transition-colors",
                       "hover:bg-slate-800",
-                      selectedIndustry === industry.id && "bg-blue-600 text-white"
+                      selectedIndustry === industry.slug && "bg-blue-600 text-white"
                     )}
                   >
-                    {expandedIndustries.has(industry.id) ? (
+                    {expandedIndustries.has(industry.slug) ? (
                       <ChevronDown className="w-4 h-4" />
                     ) : (
                       <ChevronRight className="w-4 h-4" />
@@ -136,7 +136,7 @@ export function Sidebar({
                   </button>
 
                   <AnimatePresence>
-                    {expandedIndustries.has(industry.id) && (
+                    {expandedIndustries.has(industry.slug) && (
                       <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}

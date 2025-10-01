@@ -73,14 +73,14 @@ export function Filters({ filters, onFiltersChange, className }: FiltersProps) {
         <div className="space-y-2">
           <label className="text-xs font-medium text-gray-600">Industry</label>
           <Select
-            value={filters.industry || ""}
-            onValueChange={(value) => updateFilter('industry', value || null)}
+            value={filters.industry || "all-industries"}
+            onValueChange={(value) => updateFilter('industry', value === "all-industries" ? null : value)}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select industry" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Industries</SelectItem>
+              <SelectItem value="all-industries">All Industries</SelectItem>
               {industries.map((industry) => (
                 <SelectItem key={industry.id} value={industry.id}>
                   {industry.title}
@@ -93,15 +93,15 @@ export function Filters({ filters, onFiltersChange, className }: FiltersProps) {
         <div className="space-y-2">
           <label className="text-xs font-medium text-gray-600">Department</label>
           <Select
-            value={filters.department || ""}
-            onValueChange={(value) => updateFilter('department', value || null)}
+            value={filters.department || "all-departments"}
+            onValueChange={(value) => updateFilter('department', value === "all-departments" ? null : value)}
             disabled={!filters.industry}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select department" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Departments</SelectItem>
+              <SelectItem value="all-departments">All Departments</SelectItem>
               {departments.map((department) => (
                 <SelectItem key={department.id} value={department.id}>
                   {department.title}
@@ -114,15 +114,15 @@ export function Filters({ filters, onFiltersChange, className }: FiltersProps) {
         <div className="space-y-2">
           <label className="text-xs font-medium text-gray-600">Job Role</label>
           <Select
-            value={filters.jobrole || ""}
-            onValueChange={(value) => updateFilter('jobrole', value || null)}
+            value={filters.jobrole || "all-job-roles"}
+            onValueChange={(value) => updateFilter('jobrole', value === "all-job-roles" ? null : value)}
             disabled={!filters.department}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select job role" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Job Roles</SelectItem>
+              <SelectItem value="all-job-roles">All Job Roles</SelectItem>
               {jobRoles.map((jobRole) => (
                 <SelectItem key={jobRole.id} value={jobRole.id}>
                   {jobRole.title}

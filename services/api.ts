@@ -87,20 +87,51 @@ const logGraphQuery = (operation: string, params: any, result?: any, error?: Api
 };
 
 // Response validation utilities
-const validateResponse = (data: any, expectedFields: string[] = []): boolean => {
-  if (!data) return false;
-
-  // Check if it's an array and has items
-  if (Array.isArray(data)) {
-    if (data.length === 0) return true; // Empty arrays are valid
-    // Validate first item has expected fields
-    const firstItem = data[0];
-    return expectedFields.every(field => firstItem.hasOwnProperty(field));
+const validateResponse = (response: any, expectedFields: string[] = []): boolean => {
+  if (!response) {
+    console.error('Validation failed: Response is null or undefined');
+    return false;
   }
 
-  // Check if object has expected fields
-  return expectedFields.every(field => data.hasOwnProperty(field));
+  // If response is already an array
+  const data = Array.isArray(response) ? response : response.data;
+
+  if (!data) {
+    console.error('Validation failed: No data found');
+    return false;
+  }
+
+  if (Array.isArray(data)) {
+    if (data.length === 0) {
+      console.warn('Validation passed: Empty array is valid');
+      return true;
+    }
+
+    const isValid = data.every(item => {
+      // Check if all expected fields exist and are not empty
+      const hasValidFields = expectedFields.every(field => {
+        const value = item[field];
+        const isValidField = value !== undefined && 
+                           value !== null && 
+                           value.toString().trim() !== '';
+        
+        if (!isValidField) {
+          console.error(`Validation failed: Field '${field}' is empty or invalid in item:`, item);
+        }
+        
+        return isValidField;
+      });
+      
+      return hasValidFields;
+    });
+
+    return isValid;
+  }
+
+  console.error('Validation failed: Data is not an array');
+  return false;
 };
+
 
 // Error classification utility
 const classifyError = (error: any): ApiError => {
@@ -284,26 +315,35 @@ class ApiClient {
     try {
       const result = await retryWithBackoff(async () => {
         const response = await this.client.get('/industries');
+        console.log("hello");
+        console.log("Response : ", response.data);
+
+        // Extract the array from the response
+        const industriesArray = response.data.data;
 
         // Validate response structure
-        if (!validateResponse(response.data, ['id', 'title'])) {
+        if (!validateResponse(industriesArray, ['id', 'industries'])) {
           throw new Error('Invalid response structure for industries');
         }
+        console.log("Hello industries");
 
-        return response.data.map((item: any) => ({
-          id: item.id || item.industry_id || String(item.id),
-          title: item.title || item.name || item.industry_name || 'Unknown Industry',
-          description: item.description || item.desc || '',
-          category: item.category || item.type || 'General',
+        return industriesArray.map((item: any) => ({
+          id: item.id || `industry-${Math.random().toString(36).substr(2, 9)}`,
+          slug: item.industries.toLowerCase(),
+          title: item.industries, // map industries → title
+          description: item.department || '',
+          category: item.type || 'General',
           created_at: item.created_at || new Date().toISOString(),
           updated_at: item.updated_at || new Date().toISOString()
         }));
       });
 
       logGraphQuery(operation, params, result);
+      console.log("RESULT : ", result);
       return result;
     } catch (error) {
       const apiError = error as ApiError;
+      console.error(`❌ API Error: ${operation}`, apiError);
       logGraphQuery(operation, params, undefined, apiError);
 
       console.warn('🔄 Falling back to demo data for industries');
@@ -312,24 +352,24 @@ class ApiClient {
   }
 
   // Departments API
-  async getDepartments(industryId: string): Promise<Department[]> {
+  async getDepartments(industryName: string): Promise<Department[]> {
     const operation = 'getDepartments';
-    const params = { industryId };
-
+    const params = { industryName };
     try {
       const result = await retryWithBackoff(async () => {
-        const response = await this.client.get(`/industry/${encodeURIComponent(industryId)}/departments`);
+        const response = await this.client.get(`/industry/${encodeURIComponent(industryName)}/departments`);
+        console.log("Response in getDepartments: ", response.data);
+        const departmentsArray = response.data.industry_departments;
+        // if (!validateResponse(departmentsArray, ['id', 'title'])) {
+        //   throw new Error('Invalid response structure for departments');
+        // }
 
-        if (!validateResponse(response.data, ['id', 'title'])) {
-          throw new Error('Invalid response structure for departments');
-        }
-
-        return response.data.map((item: any) => ({
-          id: item.id || item.department_id || String(item.id),
-          title: item.title || item.name || item.department_name || 'Unknown Department',
+        return departmentsArray.map((item: any) => ({
+          id: item.id || item.department || `department-${Math.random().toString(36).substr(2, 9)}`,
+          title: item.title || item.name || item.department || 'Unknown Department',
           description: item.description || item.desc || '',
           category: item.category || item.type || 'General',
-          industry_id: industryId,
+          industry_id: industryName,
           created_at: item.created_at || new Date().toISOString(),
           updated_at: item.updated_at || new Date().toISOString()
         }));
@@ -341,8 +381,8 @@ class ApiClient {
       const apiError = error as ApiError;
       logGraphQuery(operation, params, undefined, apiError);
 
-      console.warn(`🔄 Falling back to demo data for departments (industry: ${industryId})`);
-      return demoDepartments[industryId] || [];
+      console.warn(`🔄 Falling back to demo data for departments (industry: ${industryName})`);
+      return demoDepartments[industryName] || [];
     }
   }
 
@@ -360,7 +400,7 @@ class ApiClient {
         }
 
         return response.data.map((item: any) => ({
-          id: item.id || item.jobrole_id || item.job_role_id || String(item.id),
+          id: item.id || item.jobrole_id || item.job_role_id || `jobrole-${Math.random().toString(36).substr(2, 9)}`,
           title: item.title || item.name || item.job_title || item.role_name || 'Unknown Role',
           description: item.description || item.desc || item.job_description || '',
           category: item.category || item.type || item.job_category || 'General',
@@ -397,7 +437,7 @@ class ApiClient {
         }
 
         return response.data.map((item: any) => ({
-          id: item.id || item.skill_id || String(item.id),
+          id: item.id || item.skill_id || `skill-${Math.random().toString(36).substr(2, 9)}`,
           title: item.title || item.name || item.skill_name || 'Unknown Skill',
           description: item.description || item.desc || item.skill_description || '',
           category: item.category || item.skill_category || item.type || 'General',
@@ -437,7 +477,7 @@ class ApiClient {
         }
 
         return response.data.map((item: any) => ({
-          id: item.id || item.skill_id || String(item.id),
+          id: item.id || item.skill_id || `skill-${Math.random().toString(36).substr(2, 9)}`,
           title: item.title || item.name || item.skill_name || 'Unknown Skill',
           description: item.description || item.desc || item.skill_description || '',
           category: item.category || item.skill_category || item.type || 'General',
@@ -483,7 +523,7 @@ class ApiClient {
         }
 
         return response.data.map((item: any) => ({
-          id: item.id || String(item.id),
+          id: item.id || `item-${Math.random().toString(36).substr(2, 9)}`,
           title: item.title || item.name || 'Unknown Item',
           description: item.description || item.desc || '',
           category: item.category || item.type || 'General',
@@ -549,7 +589,7 @@ class ApiClient {
 
         return {
           path: response.data.path.map((node: any) => ({
-            id: node.id || String(node.id),
+            id: node.id || `node-${Math.random().toString(36).substr(2, 9)}`,
             title: node.title || node.name || 'Unknown Node',
             type: node.type || entityType
           })),
@@ -615,7 +655,7 @@ class ApiClient {
         }
 
         return {
-          id: response.data.id || String(response.data.id),
+          id: response.data.id || `skill-${Math.random().toString(36).substr(2, 9)}`,
           title: response.data.title || response.data.name || 'New Skill',
           description: response.data.description || '',
           category: response.data.category || 'General',
@@ -652,7 +692,7 @@ class ApiClient {
         }
 
         return {
-          id: response.data.id || skillId,
+          id: response.data.id || skillId || `skill-${Math.random().toString(36).substr(2, 9)}`,
           title: response.data.title || response.data.name || 'Updated Skill',
           description: response.data.description || '',
           category: response.data.category || 'General',

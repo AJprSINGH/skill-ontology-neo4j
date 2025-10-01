@@ -66,11 +66,12 @@ export const useIndustries = () => {
   });
 };
 
-export const useDepartments = (industryId: string | null) => {
+export const useDepartments = (industryName: string | null) => {
+  console.log("Industry Name in useDepartments Hook: ", industryName);
   return useQuery({
-    queryKey: ['departments', industryId],
-    queryFn: () => queryApi.getDepartments(industryId!),
-    enabled: !!industryId,
+    queryKey: ['departments', industryName],
+    queryFn: () => queryApi.getDepartments(industryName!),
+    enabled: !!industryName,
     ...getQueryConfig('Load Departments'),
   });
 };
