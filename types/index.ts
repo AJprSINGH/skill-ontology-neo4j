@@ -1,4 +1,6 @@
+type key = string;
 export interface Industry {
+  slug: key | null | undefined;
   id: string;
   title: string;
   description: string;

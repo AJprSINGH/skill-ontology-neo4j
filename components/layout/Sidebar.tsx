@@ -126,7 +126,7 @@ export function Sidebar({
                       selectedIndustry === industry.slug && "bg-blue-600 text-white"
                     )}
                   >
-                    {expandedIndustries.has(industry.slug) ? (
+                    {industry.slug && expandedIndustries.has(industry.slug) ? (
                       <ChevronDown className="w-4 h-4" />
                     ) : (
                       <ChevronRight className="w-4 h-4" />
@@ -136,7 +136,7 @@ export function Sidebar({
                   </button>
 
                   <AnimatePresence>
-                    {expandedIndustries.has(industry.slug) && (
+                    {industry.slug && expandedIndustries.has(industry.slug) && (
                       <motion.div
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
