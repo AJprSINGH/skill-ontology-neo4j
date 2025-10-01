@@ -2,6 +2,7 @@ import { Industry, Department, JobRole, Skill, SearchResult, SkillPath } from '@
 
 export const demoIndustries: Industry[] = [
   {
+    slug: 'technology',
     id: 'tech-001',
     title: 'Technology',
     description: 'Companies focused on software development, hardware manufacturing, and digital innovation.',
@@ -10,6 +11,7 @@ export const demoIndustries: Industry[] = [
     updated_at: '2024-01-01T00:00:00Z'
   },
   {
+    slug: 'finance',
     id: 'finance-001',
     title: 'Financial Services',
     description: 'Banking, investment, insurance, and other financial institutions.',
@@ -18,6 +20,7 @@ export const demoIndustries: Industry[] = [
     updated_at: '2024-01-01T00:00:00Z'
   },
   {
+    slug: 'healthcare',
     id: 'healthcare-001',
     title: 'Healthcare',
     description: 'Medical services, pharmaceuticals, and health technology companies.',
@@ -26,6 +29,7 @@ export const demoIndustries: Industry[] = [
     updated_at: '2024-01-01T00:00:00Z'
   },
   {
+    slug: 'retail',
     id: 'retail-001',
     title: 'Retail & E-commerce',
     description: 'Traditional retail stores and online marketplace platforms.',
