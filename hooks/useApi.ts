@@ -77,6 +77,7 @@ export const useDepartments = (industryName: string | null) => {
 };
 
 export const useJobRoles = (departmentId: string | null) => {
+  console.log("Department ID in useJobRoles Hook: ", departmentId);
   return useQuery({
     queryKey: ['jobroles', departmentId],
     queryFn: () => queryApi.getJobRoles(departmentId!),
@@ -86,6 +87,7 @@ export const useJobRoles = (departmentId: string | null) => {
 };
 
 export const useJobRoleSkills = (jobroleId: string | null) => {
+  console.log("Jobrole hook : ", jobroleId);
   return useQuery({
     queryKey: ['jobrole-skills', jobroleId],
     queryFn: () => queryApi.getJobRoleSkills(jobroleId!),

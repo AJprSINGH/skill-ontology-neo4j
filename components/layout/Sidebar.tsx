@@ -76,7 +76,10 @@ export function Sidebar({
   };
 
   const handleJobRoleClick = (jobRole: any) => {
+    // Pass both ID and title
     onJobRoleSelect(jobRole.id);
+    // Store the title in localStorage for API calls
+    localStorage.setItem('currentJobRoleTitle', jobRole.title.toLowerCase());
     onEntitySelect('jobrole', jobRole);
   };
 
