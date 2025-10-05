@@ -605,6 +605,7 @@ export function GraphVisualization({
     };
 
     initCytoscape();
+    console.log('Container size:', containerRef.current?.clientWidth, containerRef.current?.clientHeight);
 
     return () => {
       isMounted = false;
@@ -690,6 +691,36 @@ export function GraphVisualization({
       link.click();
     }
   };
+  const handleRelayout = () => {
+    if (!cyRef.current) return;
+
+    // Optional: add tiny random offsets to node positions to make layout visible
+    cyRef.current.nodes().forEach((node: any) => {
+      node.position({
+        x: node.position('x') + Math.random() * 20 - 10,
+        y: node.position('y') + Math.random() * 20 - 10,
+      });
+    });
+
+    const layout = cyRef.current.layout({
+      name: 'cose-bilkent',
+      animate: true,
+      fit: true,
+      padding: 100,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 150,
+      edgeElasticity: 0.5,
+      gravity: 0.25,
+    });
+
+    layout.on('layoutstop', () => {
+      cyRef.current.fit();
+      cyRef.current.center();
+    });
+
+    layout.run();
+  };
+
 
   const handlePathFind = () => {
     if (sourceNode && targetNode && onPathFind) {
@@ -782,7 +813,7 @@ export function GraphVisualization({
                   <Button size="sm" variant="outline" onClick={handleZoomOut}>
                     <ZoomOut className="w-3 h-3" />
                   </Button>
-                  <Button size="sm" variant="outline" onClick={handleReset}>
+                  <Button size="sm" variant="outline" onClick={handleRelayout}>
                     <RotateCcw className="w-3 h-3" />
                   </Button>
                   <Button size="sm" variant="outline" onClick={handleFullscreen}>

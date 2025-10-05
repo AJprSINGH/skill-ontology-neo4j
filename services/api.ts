@@ -975,13 +975,16 @@ class ApiClient {
 
           // 3️⃣ Link parent industry
           if (parentIndustry) {
+            const industryId = parentIndustry.id.toString(); // ensure string
             connectedEntities.push({
               ...parentIndustry,
+              id: industryId,   // explicitly set id
               type: 'industry',
             });
+
             relationships.push({
-              from_id: parentIndustry.slug || parentIndustry.id,
-              to_id: entity.id,
+              from_id: industryId,   // must match node id in Cytoscape
+              to_id: entity.id,      // department id
               type: 'contains department',
             });
           }
