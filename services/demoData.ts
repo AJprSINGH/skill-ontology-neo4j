@@ -339,7 +339,7 @@ export const demoSkills: Record<string, Skill[]> = {
   ],
   'fullstack-001': [
     {
-      id: 'react-001',
+      id: 'react-002',
       title: 'React',
       description: 'JavaScript library for building user interfaces.',
       category: 'Frontend Framework',
@@ -348,7 +348,7 @@ export const demoSkills: Record<string, Skill[]> = {
       updated_at: '2024-01-01T00:00:00Z'
     },
     {
-      id: 'nodejs-001',
+      id: 'nodejs-002',
       title: 'Node.js',
       description: 'JavaScript runtime for server-side development.',
       category: 'Backend Framework',
@@ -493,16 +493,18 @@ export const demoSkillPath: SkillPath = {
 export const demoRelationships = {
   nodes: [
     { id: 'react-001', label: 'React', group: 'skill', color: '#8B5CF6' },
+    { id: 'react-002', label: 'React', group: 'skill', color: '#8B5CF6' },
     { id: 'typescript-001', label: 'TypeScript', group: 'skill', color: '#8B5CF6' },
     { id: 'nodejs-001', label: 'Node.js', group: 'skill', color: '#8B5CF6' },
+    { id: 'nodejs-002', label: 'Node.js', group: 'skill', color: '#8B5CF6' },
     { id: 'frontend-001', label: 'Frontend Developer', group: 'jobrole', color: '#F59E0B' },
     { id: 'fullstack-001', label: 'Full Stack Developer', group: 'jobrole', color: '#F59E0B' }
   ],
   edges: [
     { from: 'frontend-001', to: 'react-001', label: 'requires' },
     { from: 'frontend-001', to: 'typescript-001', label: 'requires' },
-    { from: 'fullstack-001', to: 'react-001', label: 'requires' },
-    { from: 'fullstack-001', to: 'nodejs-001', label: 'requires' },
+    { from: 'fullstack-001', to: 'react-002', label: 'requires' },
+    { from: 'fullstack-001', to: 'nodejs-002', label: 'requires' },
     { from: 'react-001', to: 'typescript-001', label: 'works with' }
   ]
 };

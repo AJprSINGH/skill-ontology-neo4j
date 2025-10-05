@@ -707,7 +707,7 @@ export function GraphVisualization({
     }
   };
 
-  const availableNodes = nodes.filter(node => node.type === 'skill' || node.type === 'jobrole');
+  const availableNodes = nodes;
 
   const nodeTypes = Array.from(new Set(nodes.map(n => n.type)));
   const nodeStats = nodeTypes.map(type => ({

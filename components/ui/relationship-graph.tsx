@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from 'react';
-import { Network } from 'vis-network';
-import { DataSet } from 'vis-data';
-import { RelationshipNode, RelationshipEdge } from '@/types';
+import { useEffect, useRef } from "react";
+import { Network } from "vis-network";
+import { DataSet } from "vis-data";
+import { RelationshipNode, RelationshipEdge } from "@/types";
 
 interface RelationshipGraphProps {
   entityType: string;
@@ -16,79 +16,39 @@ export function RelationshipGraph({
   entityType,
   entityId,
   relationships,
-  isLoading
+  isLoading,
 }: RelationshipGraphProps) {
   const networkRef = useRef<HTMLDivElement>(null);
   const networkInstance = useRef<Network | null>(null);
 
+  // Initialize once
   useEffect(() => {
-    if (!networkRef.current || isLoading || !relationships) return;
-
-    // Transform relationships data to vis-network format
-    const nodes = new DataSet<RelationshipNode>([
-      {
-        id: entityId,
-        label: relationships.entity?.title || entityId,
-        color: '#3B82F6',
-        font: { color: '#FFFFFF' },
-        borderWidth: 2,
-        borderColor: '#1D4ED8'
-      },
-      ...(relationships.connected_entities || []).map((entity: any, index: number) => ({
-        id: entity.id,
-        label: entity.title,
-        color: getNodeColor(entity.type),
-        font: { color: '#374151' },
-        borderWidth: 1,
-        borderColor: '#D1D5DB'
-      }))
-    ]);
-
-    const edges = new DataSet<RelationshipEdge & { id: string }>(
-      (relationships.relationships || []).map((rel: any) => ({
-        from: rel.from_id,
-        to: rel.to_id,
-        label: rel.type,
-        arrows: 'to',
-        color: '#6B7280'
-      }))
-    );
-
-    const data = { nodes, edges };
-
-    const options = {
-      nodes: {
-        shape: 'dot',
-        size: 16,
-        font: {
-          size: 12,
-          color: '#374151'
+    if (networkRef.current && !networkInstance.current) {
+      networkInstance.current = new Network(networkRef.current, { nodes: [], edges: [] }, {
+        nodes: {
+          shape: "dot",
+          size: 16,
+          font: { size: 12, color: "#374151" },
+          borderWidth: 1,
+          shadow: true,
         },
-        borderWidth: 1,
-        shadow: true
-      },
-      edges: {
-        width: 1,
-        color: { inherit: 'from' },
-        smooth: {
-          type: 'continuous'
+        edges: {
+          width: 1,
+          color: { inherit: "from" },
+          smooth: {
+            enabled: true,
+            type: "continuous",
+            roundness: 0.5,
+          },
+          font: {
+            size: 10,
+            color: "#6B7280",
+          },
         },
-        font: {
-          size: 10,
-          color: '#6B7280'
-        }
-      },
-      physics: {
-        enabled: true,
-        stabilization: { iterations: 100 }
-      },
-      interaction: {
-        hover: true,
-        tooltipDelay: 200
-      }
-    };
-
-    networkInstance.current = new Network(networkRef.current, data);
+        physics: { enabled: true, stabilization: { iterations: 100 } },
+        interaction: { hover: true, tooltipDelay: 200 },
+      });
+    }
 
     return () => {
       if (networkInstance.current) {
@@ -97,22 +57,58 @@ export function RelationshipGraph({
         } catch (e) {
           console.warn("Network destroy failed:", e);
         }
+        networkInstance.current = null;
       }
-      networkInstance.current = null;
     };
+  }, []);
 
+  // Update data when entityId / relationships change
+  useEffect(() => {
+    if (!networkInstance.current || isLoading || !relationships) return;
+
+    const nodes = new DataSet<RelationshipNode>([
+      {
+        id: entityId,
+        label: relationships.entity?.title || entityId,
+        color: "#3B82F6",
+        font: { color: "#FFFFFF" },
+        borderWidth: 2,
+        borderColor: "#1D4ED8",
+      },
+      ...(relationships.connected_entities || []).map((entity: any) => ({
+        id: entity.id,
+        label: entity.title,
+        color: getNodeColor(entity.type),
+        font: { color: "#374151" },
+        borderWidth: 1,
+        borderColor: "#D1D5DB",
+      })),
+    ]);
+
+    const edges = new DataSet<RelationshipEdge & { id: string }>(
+      (relationships.relationships || []).map((rel: any, idx: number) => ({
+        id: `${rel.from_id}-${rel.to_id}-${idx}`, // unique edge ID
+        from: rel.from_id,
+        to: rel.to_id,
+        label: rel.type,
+        arrows: "to",
+        color: "#6B7280",
+      }))
+    );
+
+    networkInstance.current.setData({ nodes, edges });
   }, [entityId, relationships, isLoading]);
 
   const getNodeColor = (type: string) => {
     const colors = {
-      industry: '#3B82F6',
-      department: '#14B8A6',
-      jobrole: '#F59E0B',
-      skill: '#8B5CF6',
-      classification: '#EF4444',
-      cwf: '#06B6D4'
+      industry: "#3B82F6",
+      department: "#14B8A6",
+      jobrole: "#F59E0B",
+      skill: "#8B5CF6",
+      classification: "#EF4444",
+      cwf: "#06B6D4",
     };
-    return colors[type as keyof typeof colors] || '#6B7280';
+    return colors[type as keyof typeof colors] || "#6B7280";
   };
 
   if (isLoading) {
