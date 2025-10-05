@@ -482,28 +482,33 @@ export function GraphVisualization({
 
   // Initialize Cytoscape
   useEffect(() => {
+    let isMounted = true;
+
     const initCytoscape = async () => {
       try {
         if (!cytoscape) {
           const [cyto, bilkent] = await Promise.all([
             import('cytoscape'),
-            import('cytoscape-cose-bilkent')
+            import('cytoscape-cose-bilkent'),
           ]);
           cytoscape = cyto.default;
           coseBilkent = bilkent.default;
           cytoscape.use(coseBilkent);
         }
 
-        // Wait for DOM to paint and nodes to be ready
-        if (!containerRef.current || nodes.length === 0) return;
+        // 🧠 Wait two animation frames to ensure DOM + React update complete
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-        // Safely destroy old instance
+        if (!isMounted || !containerRef.current) return;
+        if (nodes.length === 0) return;
+
+        // 💥 Always destroy previous instance BEFORE creating new one
         if (cyRef.current) {
           cyRef.current.destroy();
           cyRef.current = null;
         }
 
-        // Convert data
+        // Prepare graph data
         const elements = [
           ...nodes.map((node) => ({
             data: {
@@ -523,7 +528,7 @@ export function GraphVisualization({
           })),
         ];
 
-        // Initialize cytoscape
+        // 🧩 Create new Cytoscape instance
         cyRef.current = cytoscape({
           container: containerRef.current,
           elements,
@@ -532,7 +537,7 @@ export function GraphVisualization({
               selector: 'node',
               style: {
                 'background-color': 'data(color)',
-                'label': 'data(label)',
+                'label': showLabels ? 'data(label)' : '',
                 'width': nodeSize[0],
                 'height': nodeSize[0],
                 'text-valign': 'center',
@@ -562,45 +567,47 @@ export function GraphVisualization({
               },
             },
           ],
-          layout: {
-            name: 'cose-bilkent',
-            animate: false, // ✅ avoid layout animation bug
-            fit: true,
-            padding: 50,
-            nodeRepulsion: 8000,
-            idealEdgeLength: 150,
-            edgeElasticity: 0.5,
-            gravity: 0.25,
-          },
         });
 
-        // Run layout manually after a small delay
-        setTimeout(() => {
-          const layout = cyRef.current.layout({ name: 'cose-bilkent', fit: true });
-          layout.run();
-          cyRef.current.fit();
-        }, 300);
+        // Layout
+        const layout = cyRef.current.layout({
+          name: 'cose-bilkent',
+          animate: true,
+          fit: true,
+          padding: 100,
+          nodeRepulsion: 8000,
+          idealEdgeLength: 150,
+          edgeElasticity: 0.5,
+          gravity: 0.25,
+        });
 
-        // Add event listeners
+        layout.run();
+
+        layout.on('layoutstop', () => {
+          if (cyRef.current) {
+            cyRef.current.fit();
+            cyRef.current.center();
+            setIsLoading(false);
+          }
+        });
+
+        // Node click handler
         cyRef.current.on('tap', 'node', (evt: any) => {
           const node = evt.target.data();
           setSelectedNode(node);
           setShowNodeDetails(true);
           onNodeClick?.(node);
         });
-
-        setIsLoading(false);
       } catch (err) {
         console.error('Cytoscape initialization failed:', err);
         setIsLoading(false);
       }
     };
 
-    // Delay init slightly to allow DOM + props stabilization
-    const timeout = setTimeout(() => initCytoscape(), 100);
+    initCytoscape();
 
     return () => {
-      clearTimeout(timeout);
+      isMounted = false;
       if (cyRef.current) {
         cyRef.current.destroy();
         cyRef.current = null;
