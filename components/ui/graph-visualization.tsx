@@ -485,144 +485,129 @@ export function GraphVisualization({
     const initCytoscape = async () => {
       try {
         if (!cytoscape) {
-          cytoscape = (await import('cytoscape')).default;
-          // @ts-ignore - Ignore type checking for cytoscape-cose-bilkent module
-          coseBilkent = (await import('cytoscape-cose-bilkent')).default;
+          const [cyto, bilkent] = await Promise.all([
+            import('cytoscape'),
+            import('cytoscape-cose-bilkent')
+          ]);
+          cytoscape = cyto.default;
+          coseBilkent = bilkent.default;
           cytoscape.use(coseBilkent);
         }
 
-        if (containerRef.current && nodes.length > 0) {
-          // Destroy existing instance
-          if (cyRef.current) {
-            cyRef.current.destroy();
-          }
+        // Wait for DOM to paint and nodes to be ready
+        if (!containerRef.current || nodes.length === 0) return;
 
-          // Convert data to Cytoscape format
-          const elements = [
-            ...nodes.map(node => ({
-              data: {
-                id: node.id,
-                label: node.label,
-                type: node.type,
-                color: node.color || getNodeColor(node.type)
-              }
-            })),
-            ...edges.map(edge => ({
-              data: {
-                id: edge.id,
-                source: edge.source,
-                target: edge.target,
-                label: edge.label || ''
-              }
-            }))
-          ];
-
-          // Initialize Cytoscape
-          cyRef.current = cytoscape({
-            container: containerRef.current,
-            elements,
-            style: [
-              {
-                selector: 'node',
-                style: {
-                  'background-color': 'data(color)',
-                  'label': showLabels ? 'data(label)' : '',
-                  'width': nodeSize[0],
-                  'height': nodeSize[0],
-                  'text-valign': 'center',
-                  'text-halign': 'center',
-                  'font-size': '12px',
-                  'font-weight': 'bold',
-                  'color': '#333',
-                  'text-outline-width': 2,
-                  'text-outline-color': '#fff',
-                  'border-width': 2,
-                  'border-color': '#fff',
-                  'cursor': 'pointer'
-                }
-              },
-              {
-                selector: 'edge',
-                style: {
-                  'width': 2,
-                  'line-color': '#ccc',
-                  'target-arrow-color': '#ccc',
-                  'target-arrow-shape': 'triangle',
-                  'curve-style': 'bezier',
-                  'label': 'data(label)',
-                  'font-size': '10px',
-                  'text-rotation': 'autorotate',
-                  'text-margin-y': -10
-                }
-              },
-              {
-                selector: 'node:hover',
-                style: {
-                  'border-width': 4,
-                  'border-color': '#007bff'
-                }
-              }
-            ],
-            layout: {
-              name: 'cose-bilkent',
-              animate: true,
-              animationDuration: 1000,
-              fit: true,
-              padding: 50,
-              nodeRepulsion: 4500,
-              idealEdgeLength: 100,
-              edgeElasticity: 0.45,
-              nestingFactor: 0.1,
-              gravity: 0.25,
-              numIter: 2500,
-              tile: true,
-              tilingPaddingVertical: 10,
-              tilingPaddingHorizontal: 10
-            }
-          });
-
-          // Add event listeners
-          cyRef.current.on('tap', 'node', (evt: any) => {
-            const node = evt.target.data();
-            setSelectedNode(node);
-            setShowNodeDetails(true);
-            onNodeClick?.(node);
-          });
-
-          // Add hover events
-          cyRef.current.on('mouseover', 'node', (evt: any) => {
-            const node = evt.target.data();
-            setHoveredNode(node);
-            evt.target.style('border-width', '3px');
-          });
-
-          cyRef.current.on('mouseout', 'node', (evt: any) => {
-            setHoveredNode(null);
-            evt.target.style('border-width', '2px');
-          });
-
-          cyRef.current.on('dbltap', 'node', (evt: any) => {
-            const node = evt.target.data();
-            onNodeExpand?.(node.id);
-          });
-
-          setIsLoading(false);
+        // Safely destroy old instance
+        if (cyRef.current) {
+          cyRef.current.destroy();
+          cyRef.current = null;
         }
-      } catch (error) {
-        console.error('Failed to initialize Cytoscape:', error);
+
+        // Convert data
+        const elements = [
+          ...nodes.map((node) => ({
+            data: {
+              id: node.id,
+              label: node.label,
+              type: node.type,
+              color: node.color || getNodeColor(node.type),
+            },
+          })),
+          ...edges.map((edge) => ({
+            data: {
+              id: edge.id,
+              source: edge.source,
+              target: edge.target,
+              label: edge.label || '',
+            },
+          })),
+        ];
+
+        // Initialize cytoscape
+        cyRef.current = cytoscape({
+          container: containerRef.current,
+          elements,
+          style: [
+            {
+              selector: 'node',
+              style: {
+                'background-color': 'data(color)',
+                'label': 'data(label)',
+                'width': nodeSize[0],
+                'height': nodeSize[0],
+                'text-valign': 'center',
+                'text-halign': 'center',
+                'font-size': '11px',
+                'font-weight': 'bold',
+                'color': '#333',
+                'text-outline-width': 2,
+                'text-outline-color': '#fff',
+                'border-width': 2,
+                'border-color': '#fff',
+                'cursor': 'pointer',
+              },
+            },
+            {
+              selector: 'edge',
+              style: {
+                'width': 2,
+                'line-color': '#aaa',
+                'target-arrow-color': '#aaa',
+                'target-arrow-shape': 'triangle',
+                'curve-style': 'bezier',
+                'label': 'data(label)',
+                'font-size': '9px',
+                'text-rotation': 'autorotate',
+                'text-margin-y': -8,
+              },
+            },
+          ],
+          layout: {
+            name: 'cose-bilkent',
+            animate: false, // ✅ avoid layout animation bug
+            fit: true,
+            padding: 50,
+            nodeRepulsion: 8000,
+            idealEdgeLength: 150,
+            edgeElasticity: 0.5,
+            gravity: 0.25,
+          },
+        });
+
+        // Run layout manually after a small delay
+        setTimeout(() => {
+          const layout = cyRef.current.layout({ name: 'cose-bilkent', fit: true });
+          layout.run();
+          cyRef.current.fit();
+        }, 300);
+
+        // Add event listeners
+        cyRef.current.on('tap', 'node', (evt: any) => {
+          const node = evt.target.data();
+          setSelectedNode(node);
+          setShowNodeDetails(true);
+          onNodeClick?.(node);
+        });
+
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Cytoscape initialization failed:', err);
         setIsLoading(false);
       }
     };
 
-    initCytoscape();
+    // Delay init slightly to allow DOM + props stabilization
+    const timeout = setTimeout(() => initCytoscape(), 100);
 
     return () => {
+      clearTimeout(timeout);
       if (cyRef.current) {
         cyRef.current.destroy();
         cyRef.current = null;
       }
     };
-  }, [nodes, edges, onNodeClick, onNodeExpand]);
+  }, [nodes, edges]);
+
 
   // Update node labels
   useEffect(() => {
