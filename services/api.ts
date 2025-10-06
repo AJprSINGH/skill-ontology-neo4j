@@ -817,6 +817,8 @@ class ApiClient {
 
   // Get entity relationships
   async getEntityRelationships(entityType: string, entityId: string): Promise<any> {
+
+
     const operation = 'getEntityRelationships';
     const params = { entityType, entityId, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
 
@@ -998,53 +1000,431 @@ class ApiClient {
 
 
 
-        case 'jobrole':
-          const allJobRoles = await this.getJobRoles('');
-          entity = allJobRoles.find((job: any) => job.id === entityId);
+        case 'jobrole': {
+          const industries = await this.getIndustries();
+          let foundJobRole: any = null;
+          let parentDepartment: any = null;
+          let parentIndustry: any = null;
+
+          // Loop through industries → departments → jobroles
+          for (const ind of industries) {
+            const departments = await this.getDepartments(ind.slug || ind.id);
+
+            for (const dept of departments) {
+              console.log(dept.id);
+              const update_deptId = dept.id;
+              const jobRoles = await this.getJobRoles(update_deptId);
+              console.log(jobRoles);
+              const match = jobRoles.find((jr: any) => {
+                const normalizedRole = (jr.title || jr.jobrole || '');
+
+                return normalizedRole.includes();
+              });
+              if (match) {
+                foundJobRole = match;
+                parentDepartment = dept;
+                parentIndustry = ind;
+                break;
+              }
+            }
+            if (foundJobRole) break;
+          }
+
+          if (!foundJobRole) {
+            console.warn(`JobRole ${entityId} not found in any department`);
+            break;
+          }
+
+          entity = foundJobRole;
+          const connectedEntities: any[] = [];
+          const relationships: any[] = [];
+
+          // 1️⃣ Get skills for this job role
+          const skills = await this.getJobRoleSkills(entityId);
+          const skillEntities = skills.map(skill => ({
+            ...skill,
+            type: 'skill',
+          }));
+          const skillRelationships = skills.map(skill => ({
+            from_id: entityId,
+            to_id: skill.id,
+            type: 'requires',
+          }));
+          connectedEntities.push(...skillEntities);
+          relationships.push(...skillRelationships);
+
+          // 2️⃣ Add parent department
+          if (parentDepartment) {
+            connectedEntities.push({
+              ...parentDepartment,
+              type: 'department',
+            });
+            relationships.push({
+              from_id: parentDepartment.id,
+              to_id: entityId,
+              type: 'contains jobrole',
+            });
+          }
+
+          // 3️⃣ Add grandparent industry
+          if (parentIndustry) {
+            connectedEntities.push({
+              ...parentIndustry,
+              type: 'industry',
+            });
+            relationships.push({
+              from_id: parentIndustry.id,
+              to_id: parentDepartment?.id,
+              type: 'contains department',
+            });
+          }
+
+          return {
+            entity: { ...entity, id: entityId, type: 'jobrole' },
+            connected_entities: connectedEntities.map(e => ({
+              ...e,
+              id: e.id?.toString() || `node-${Math.random().toString(36).substr(2, 6)}`
+            })),
+            relationships: relationships.map(r => ({
+              ...r,
+              from_id: r.from_id?.toString(),
+              to_id: r.to_id?.toString()
+            })),
+          };
+        }
+
+
+
+        case 'skill':
+          // For skills, we need to find which job roles require this skill
+          const jobRoles = await this.getJobRoles('');
+          entity = { id: entityId, title: entityId, type: 'skill' };
+
+          // Find job roles that require this skill
+          const requiringJobRoles = [];
+          for (const jobRole of jobRoles) {
+            const skills = await this.getJobRoleSkills(jobRole.id);
+            if (skills.some(skill => skill.id === entityId)) {
+              requiringJobRoles.push(jobRole);
+            }
+          }
+
+          connectedEntities = requiringJobRoles.map(job => ({
+            ...job,
+            type: 'jobrole'
+          }));
+          relationships = requiringJobRoles.map(job => ({
+            from_id: job.id,
+            to_id: entityId,
+            type: 'requires'
+          }));
+          break;
+
+        default:
+          return demoRelationships;
+      }
+
+      if (!entity) {
+        return demoRelationships;
+      }
+
+      return {
+        entity: {
+          ...entity,
+          type: entityType
+        },
+        connected_entities: connectedEntities,
+        relationships: relationships
+      };
+
+    } catch (error) {
+      console.error('Error generating dynamic relationships:', error);
+      return demoRelationships;
+    }
+  }
+  async getEntityRelationshipsNew(
+    entityType: string,
+    entityInfo: string | { id: string; jobrole?: string }
+  ): Promise<any> {
+    // Normalize the input
+    const entityId = typeof entityInfo === 'string' ? entityInfo : entityInfo.id;
+    const jobroleTitle = typeof entityInfo === 'object' ? entityInfo.jobrole : undefined;
+
+    const operation = 'getEntityRelationshipsNew';
+    const params = { entityType, entityId, sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID };
+
+    try {
+      const result = await retryWithBackoff(async () => {
+        const response = await this.client.get(`/${entityType}/${entityId}/relationships`, {
+          params: { sub_institute_id: API_CONFIG.SUB_INSTITUTE_ID }
+        });
+
+        // Extract the data correctly - handle both response.data.data and response.data formats
+        const relationshipsData = response.data?.data || response.data;
+
+        if (!relationshipsData) {
+          console.error('Invalid relationships data structure:', response.data);
+          throw new Error('Invalid response structure for entity relationships');
+        }
+
+        return relationshipsData;
+      });
+
+      logGraphQuery(operation, params, result);
+      return result;
+    } catch (error) {
+      const apiError = error as ApiError;
+      logGraphQuery(operation, params, undefined, apiError);
+
+      console.warn('🔄 Falling back to dynamic relationship generation');
+      return this.generateDynamicRelationshipsNew(entityType, entityId, jobroleTitle);
+    }
+  }
+
+  // Generate dynamic relationships based on entity hierarchy
+  private async generateDynamicRelationshipsNew(entityType: string, entityId: string, jobroleTitle?: string): Promise<any> {
+    try {
+      let entity: any;
+      let connectedEntities: any[] = [];
+      let relationships: any[] = [];
+
+      // Get the entity details
+      switch (entityType) {
+        case 'industry':
+          const industries = await this.getIndustries();
+          entity = industries.find((ind: any) => ind.slug === entityId || ind.id === entityId);
           if (entity) {
-            // Get skills for this job role
-            const skills = await this.getJobRoleSkills(entityId);
-            connectedEntities = skills.map(skill => ({
-              ...skill,
-              type: 'skill'
+            // Get departments for this industry
+            const departments = await this.getDepartments(entity.slug || entity.id);
+            connectedEntities = departments.map(dept => ({
+              ...dept,
+              type: 'department'
             }));
-            relationships = skills.map(skill => ({
+            relationships = departments.map(dept => ({
               from_id: entityId,
-              to_id: skill.id,
-              type: 'requires'
+              to_id: dept.id,
+              type: 'contains'
             }));
 
-            // Also include the parent department
-            const departments = await this.getDepartments('');
-            const department = departments.find((dept: any) => dept.id === entity.department_id);
-            if (department) {
-              connectedEntities.push({
-                ...department,
-                type: 'department'
-              });
-              relationships.push({
-                from_id: department.id,
-                to_id: entityId,
-                type: 'contains'
-              });
+            // Get job roles and skills for each department to show full hierarchy
+            for (const department of departments) {
+              const jobRoles = await this.getJobRoles(department.id);
 
-              // Also include the grandparent industry
-              const industries = await this.getIndustries();
-              const industry = industries.find((ind: any) => ind.slug === department.industry_id || ind.id === department.industry_id);
-              if (industry) {
-                connectedEntities.push({
-                  ...industry,
-                  type: 'industry'
-                });
-                relationships.push({
-                  from_id: industry.slug || industry.id,
-                  to_id: department.id,
-                  type: 'contains'
-                });
+              // Add job roles as connected entities
+              const jobRoleEntities = jobRoles.map(job => ({
+                ...job,
+                type: 'jobrole'
+              }));
+              connectedEntities.push(...jobRoleEntities);
+
+              // Add relationships from department to job roles
+              const jobRoleRelationships = jobRoles.map(job => ({
+                from_id: department.id,
+                to_id: job.id,
+                type: 'contains'
+              }));
+              relationships.push(...jobRoleRelationships);
+
+              // Get skills for each job role
+              for (const jobRole of jobRoles) {
+                const skills = await this.getJobRoleSkills(jobRole.id);
+
+                // Add skills as connected entities
+                const skillEntities = skills.map(skill => ({
+                  ...skill,
+                  type: 'skill'
+                }));
+                connectedEntities.push(...skillEntities);
+
+                // Add relationships from job role to skills
+                const skillRelationships = skills.map(skill => ({
+                  from_id: jobRole.id,
+                  to_id: skill.id,
+                  type: 'requires'
+                }));
+                relationships.push(...skillRelationships);
               }
             }
           }
           break;
+
+        case 'department': {
+          // Try to locate the department properly
+          // First, find which industry this department belongs to
+          const industries = await this.getIndustries();
+
+          let foundDepartment: any = null;
+          let parentIndustry: any = null;
+
+          // Loop through industries to find which industry has this department
+          for (const ind of industries) {
+            const departments = await this.getDepartments(ind.slug || ind.id);
+            const match = departments.find((d: any) => d.id === entityId);
+            if (match) {
+              foundDepartment = match;
+              parentIndustry = ind;
+              break;
+            }
+          }
+
+          if (!foundDepartment) {
+            console.warn(`Department ${entityId} not found in any industry`);
+            break;
+          }
+
+          entity = foundDepartment;
+          const connectedEntities: any[] = [];
+          const relationships: any[] = [];
+
+          // 1️⃣ Fetch Job Roles for this department
+          const jobRoles = await this.getJobRoles(entity.id);
+          const jobRoleEntities = jobRoles.map(job => ({
+            ...job,
+            type: 'jobrole',
+          }));
+          const jobRoleRelationships = jobRoles.map(job => ({
+            from_id: entity.id,
+            to_id: job.id,
+            type: 'has jobrole',
+          }));
+          connectedEntities.push(...jobRoleEntities);
+          relationships.push(...jobRoleRelationships);
+
+          // 2️⃣ Fetch Skills for each Job Role
+          for (const jobRole of jobRoles) {
+            const skills = await this.getJobRoleSkills(jobRole.id);
+            const skillEntities = skills.map(skill => ({
+              ...skill,
+              type: 'skill',
+            }));
+            const skillRelationships = skills.map(skill => ({
+              from_id: jobRole.id,
+              to_id: skill.id,
+              type: 'has skill',
+            }));
+            connectedEntities.push(...skillEntities);
+            relationships.push(...skillRelationships);
+          }
+
+          // 3️⃣ Link parent industry
+          if (parentIndustry) {
+            const industryId = parentIndustry.id.toString(); // ensure string
+            connectedEntities.push({
+              ...parentIndustry,
+              id: industryId,   // explicitly set id
+              type: 'industry',
+            });
+
+            relationships.push({
+              from_id: industryId,   // must match node id in Cytoscape
+              to_id: entity.id,      // department id
+              type: 'contains department',
+            });
+          }
+
+          return {
+            entity: { ...entity, type: 'department' },
+            connected_entities: connectedEntities,
+            relationships,
+          };
+        }
+
+
+
+        case 'jobrole': {
+          const industries = await this.getIndustries();
+          let foundJobRole: any = null;
+          let parentDepartment: any = null;
+          let parentIndustry: any = null;
+
+          // Loop through industries → departments → jobroles
+          for (const ind of industries) {
+            const departments = await this.getDepartments(ind.slug || ind.id);
+
+            for (const dept of departments) {
+              console.log(dept.id);
+              const update_deptId = dept.id;
+              const jobRoles = await this.getJobRoles(update_deptId);
+              console.log(jobRoles);
+              const match = jobRoles.find((jr: any) => {
+                const normalizedRole = (jr.title || jr.jobrole || '');
+
+                return normalizedRole.includes(jobroleTitle);
+              });
+              if (match) {
+                foundJobRole = match;
+                parentDepartment = dept;
+                parentIndustry = ind;
+                break;
+              }
+            }
+            if (foundJobRole) break;
+          }
+
+          if (!foundJobRole) {
+            console.warn(`JobRole ${entityId} not found in any department`);
+            break;
+          }
+
+          entity = foundJobRole;
+          const connectedEntities: any[] = [];
+          const relationships: any[] = [];
+
+          // 1️⃣ Get skills for this job role
+          const skills = await this.getJobRoleSkills(entityId);
+          const skillEntities = skills.map(skill => ({
+            ...skill,
+            type: 'skill',
+          }));
+          const skillRelationships = skills.map(skill => ({
+            from_id: entityId,
+            to_id: skill.id,
+            type: 'requires',
+          }));
+          connectedEntities.push(...skillEntities);
+          relationships.push(...skillRelationships);
+
+          // 2️⃣ Add parent department
+          if (parentDepartment) {
+            connectedEntities.push({
+              ...parentDepartment,
+              type: 'department',
+            });
+            relationships.push({
+              from_id: parentDepartment.id,
+              to_id: entityId,
+              type: 'contains jobrole',
+            });
+          }
+
+          // 3️⃣ Add grandparent industry
+          if (parentIndustry) {
+            connectedEntities.push({
+              ...parentIndustry,
+              type: 'industry',
+            });
+            relationships.push({
+              from_id: parentIndustry.id,
+              to_id: parentDepartment?.id,
+              type: 'contains department',
+            });
+          }
+
+          return {
+            entity: { ...entity, id: entityId, type: 'jobrole' },
+            connected_entities: connectedEntities.map(e => ({
+              ...e,
+              id: e.id?.toString() || `node-${Math.random().toString(36).substr(2, 6)}`
+            })),
+            relationships: relationships.map(r => ({
+              ...r,
+              from_id: r.from_id?.toString(),
+              to_id: r.to_id?.toString()
+            })),
+          };
+        }
+
+
 
         case 'skill':
           // For skills, we need to find which job roles require this skill
@@ -1094,7 +1474,6 @@ class ApiClient {
     }
   }
 }
-
 export const api = new ApiClient();
 
 export const queryApi = {
@@ -1106,6 +1485,7 @@ export const queryApi = {
   propertyBasedSearch: api.propertyBasedSearch.bind(api),
   getSkillPath: api.getSkillPath.bind(api),
   getEntityRelationships: api.getEntityRelationships.bind(api),
+  getEntityRelationshipsNew: api.getEntityRelationshipsNew.bind(api),
   getShortestPath: api.getShortestPath.bind(api),
 };
 

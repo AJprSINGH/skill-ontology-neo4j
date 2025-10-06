@@ -59,7 +59,17 @@ export default function Home() {
 
     // Automatically visualize relationships when an entity is selected
     try {
-      const relationships = await queryApi.getEntityRelationships(type, entity.id);
+      let relationships;
+
+      if (type === 'jobrole') {
+        relationships = await queryApi.getEntityRelationshipsNew(type, {
+          id: entity.id,
+          jobrole: entity.title || entity.jobrole || entity.name || '',
+        });
+      } else {
+        relationships = await queryApi.getEntityRelationships(type, entity.id);
+      }
+
 
       // Transform the relationships data to graph format
       const nodes = [
