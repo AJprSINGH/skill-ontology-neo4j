@@ -38,6 +38,8 @@ export default function Home() {
   // Pathfinding state
   const [pathfindingSource, setPathfindingSource] = useState<string | null>(null);
   const [pathfindingTarget, setPathfindingTarget] = useState<string | null>(null);
+  const [pathData, setPathData] = useState<{ nodes: any[]; edges: any[] } | null>(null);
+  const [showPath, setShowPath] = useState(false);
 
   // Search with filters
   const { data: searchResults = [], isLoading: searchLoading } = usePropertyBasedSearch(
@@ -204,7 +206,7 @@ export default function Home() {
     setPathfindingSource(sourceId);
     setPathfindingTarget(targetId);
 
-    // When path is found, visualize it in the graph
+    // When path is found, create path data for child visualization
     if (shortestPath && shortestPath.path.length > 0) {
       const pathNodes = shortestPath.path.map((node, index) => ({
         id: node.id,
@@ -220,9 +222,14 @@ export default function Home() {
         label: 'path'
       }));
 
-      setGraphData({ nodes: pathNodes, edges: pathEdges });
+      setPathData({ nodes: pathNodes, edges: pathEdges });
+      setShowPath(true);
       setShowGraphVisualization(true);
     }
+  };
+
+  const handleTogglePath = (show: boolean) => {
+    setShowPath(show);
   };
 
   const handleViewRelationships = () => {
@@ -275,6 +282,9 @@ export default function Home() {
                 <GraphVisualization
                   nodes={graphData.nodes}
                   edges={graphData.edges}
+                  pathData={pathData || undefined}
+                  showPath={showPath}
+                  onTogglePath={handleTogglePath}
                   onNodeClick={(node) => console.log('Node clicked:', node)}
                   onNodeExpand={(nodeId) => console.log('Node expand:', nodeId)}
                   onPathFind={handlePathFind}

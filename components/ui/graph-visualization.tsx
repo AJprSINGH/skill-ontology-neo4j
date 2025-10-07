@@ -455,6 +455,12 @@ interface GraphVisualizationProps {
   height?: number;
   className?: string;
   onPathFind?: (sourceId: string, targetId: string) => void;
+  pathData?: {
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+  };
+  showPath?: boolean;
+  onTogglePath?: (show: boolean) => void;
 }
 
 export function GraphVisualization({
@@ -464,7 +470,10 @@ export function GraphVisualization({
   onNodeExpand,
   height = 500,
   className,
-  onPathFind
+  onPathFind,
+  pathData,
+  showPath = false,
+  onTogglePath
 }: GraphVisualizationProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<any>(null);
@@ -479,6 +488,19 @@ export function GraphVisualization({
   const [sourceNode, setSourceNode] = useState<string>('');
   const [targetNode, setTargetNode] = useState<string>('');
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
+  const [currentNodes, setCurrentNodes] = useState<GraphNode[]>(nodes);
+  const [currentEdges, setCurrentEdges] = useState<GraphEdge[]>(edges);
+
+  // Update current nodes and edges based on showPath state
+  useEffect(() => {
+    if (showPath && pathData) {
+      setCurrentNodes(pathData.nodes);
+      setCurrentEdges(pathData.edges);
+    } else {
+      setCurrentNodes(nodes);
+      setCurrentEdges(edges);
+    }
+  }, [showPath, pathData, nodes, edges]);
 
   // Initialize Cytoscape
   useEffect(() => {
@@ -500,7 +522,7 @@ export function GraphVisualization({
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         if (!isMounted || !containerRef.current) return;
-        if (nodes.length === 0) return;
+        if (currentNodes.length === 0) return;
 
         // 💥 Always destroy previous instance BEFORE creating new one
         if (cyRef.current) {
@@ -510,7 +532,7 @@ export function GraphVisualization({
 
         // Prepare graph data
         const elements = [
-          ...nodes.map((node) => ({
+          ...currentNodes.map((node) => ({
             data: {
               id: node.id,
               label: node.label,
@@ -518,7 +540,7 @@ export function GraphVisualization({
               color: node.color || getNodeColor(node.type),
             },
           })),
-          ...edges.map((edge) => ({
+          ...currentEdges.map((edge) => ({
             data: {
               id: edge.id,
               source: edge.source,
@@ -591,6 +613,16 @@ export function GraphVisualization({
           }
         });
 
+        // Add hover effects
+        cyRef.current.on('mouseover', 'node', (evt: any) => {
+          const node = evt.target.data();
+          setHoveredNode(node);
+        });
+
+        cyRef.current.on('mouseout', 'node', () => {
+          setHoveredNode(null);
+        });
+
         // Node click handler
         cyRef.current.on('tap', 'node', (evt: any) => {
           const node = evt.target.data();
@@ -614,7 +646,7 @@ export function GraphVisualization({
         cyRef.current = null;
       }
     };
-  }, [nodes, edges]);
+  }, [currentNodes, currentEdges]);
 
 
   // Update node labels
@@ -836,6 +868,16 @@ export function GraphVisualization({
                     onCheckedChange={setShowLabels}
                   />
                 </div>
+
+                {pathData && onTogglePath && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs">Show Path</span>
+                    <Switch
+                      checked={showPath}
+                      onCheckedChange={onTogglePath}
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <span className="text-xs">Node Size</span>
