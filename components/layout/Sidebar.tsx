@@ -25,6 +25,7 @@ interface SidebarProps {
   onDepartmentSelect: (departmentId: string) => void;
   onJobRoleSelect: (jobroleId: string) => void;
   onEntitySelect: (type: 'industry' | 'department' | 'jobrole', entity: any) => void;
+  onVisualizeEntity: (type: 'industry' | 'department' | 'jobrole', entity: any) => void;
 }
 
 export function Sidebar({
@@ -35,6 +36,7 @@ export function Sidebar({
   onDepartmentSelect,
   onJobRoleSelect,
   onEntitySelect,
+  onVisualizeEntity,
 }: SidebarProps) {
   const [expandedIndustries, setExpandedIndustries] = useState<Set<string>>(new Set());
   const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set());
@@ -121,22 +123,34 @@ export function Sidebar({
             ) : (
               industries.map((industry) => (
                 <div key={industry.slug} className="space-y-1">
-                  <button
-                    onClick={() => handleIndustryClick(industry)}
-                    className={cn(
-                      "w-full flex items-center gap-2 p-2 text-sm rounded-lg transition-colors",
-                      "hover:bg-slate-800",
-                      selectedIndustry === industry.slug && "bg-blue-600 text-white"
-                    )}
-                  >
-                    {industry.slug && expandedIndustries.has(industry.slug) ? (
-                      <ChevronDown className="w-4 h-4" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4" />
-                    )}
-                    <Building2 className="w-4 h-4" />
-                    <span className="truncate">{industry.title}</span>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleIndustryClick(industry)}
+                      className={cn(
+                        "flex-1 flex items-center gap-2 p-2 text-sm rounded-lg transition-colors min-w-0",
+                        "hover:bg-slate-800",
+                        selectedIndustry === industry.slug && "bg-blue-600 text-white"
+                      )}
+                    >
+                      {industry.slug && expandedIndustries.has(industry.slug) ? (
+                        <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 flex-shrink-0" />
+                      )}
+                      <Building2 className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate flex-1 min-w-0">{industry.title}</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onVisualizeEntity('industry', industry);
+                      }}
+                      className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-800 rounded-lg transition-colors flex-shrink-0"
+                      title="Visualize relationships"
+                    >
+                      <NetworkIcon className="w-4 h-4" />
+                    </button>
+                  </div>
 
                   <AnimatePresence>
                     {industry.slug && expandedIndustries.has(industry.slug) && (
@@ -151,22 +165,34 @@ export function Sidebar({
                         ) : (
                           departments.map((department) => (
                             <div key={department.id} className="space-y-1">
-                              <button
-                                onClick={() => handleDepartmentClick(department)}
-                                className={cn(
-                                  "w-full flex items-center gap-2 p-2 text-sm rounded-lg transition-colors",
-                                  "hover:bg-slate-700",
-                                  selectedDepartment === department.id && "bg-teal-600 text-white"
-                                )}
-                              >
-                                {expandedDepartments.has(department.id) ? (
-                                  <ChevronDown className="w-4 h-4" />
-                                ) : (
-                                  <ChevronRight className="w-4 h-4" />
-                                )}
-                                <Users className="w-4 h-4" />
-                                <span className="truncate">{department.title}</span>
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleDepartmentClick(department)}
+                                  className={cn(
+                                    "flex-1 flex items-center gap-2 p-2 text-sm rounded-lg transition-colors min-w-0",
+                                    "hover:bg-slate-700",
+                                    selectedDepartment === department.id && "bg-teal-600 text-white"
+                                  )}
+                                >
+                                  {expandedDepartments.has(department.id) ? (
+                                    <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                                  ) : (
+                                    <ChevronRight className="w-4 h-4 flex-shrink-0" />
+                                  )}
+                                  <Users className="w-4 h-4 flex-shrink-0" />
+                                  <span className="truncate flex-1 min-w-0">{department.title}</span>
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onVisualizeEntity('department', department);
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-teal-400 hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0"
+                                  title="Visualize relationships"
+                                >
+                                  <NetworkIcon className="w-4 h-4" />
+                                </button>
+                              </div>
 
                               <AnimatePresence>
                                 {expandedDepartments.has(department.id) && (
@@ -180,18 +206,30 @@ export function Sidebar({
                                       <ErrorState message="No job roles found" />
                                     ) : (
                                       jobRoles.map((jobRole) => (
-                                        <button
-                                          key={jobRole.id}
-                                          onClick={() => handleJobRoleClick(jobRole)}
-                                          className={cn(
-                                            "w-full flex items-center gap-2 p-2 text-sm rounded-lg transition-colors",
-                                            "hover:bg-slate-600",
-                                            selectedJobRole === jobRole.id && "bg-amber-600 text-white"
-                                          )}
-                                        >
-                                          <Briefcase className="w-4 h-4" />
-                                          <span className="truncate">{jobRole.title}</span>
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            key={jobRole.id}
+                                            onClick={() => handleJobRoleClick(jobRole)}
+                                            className={cn(
+                                              "flex-1 flex items-center gap-2 p-2 text-sm rounded-lg transition-colors min-w-0",
+                                              "hover:bg-slate-600",
+                                              selectedJobRole === jobRole.id && "bg-amber-600 text-white"
+                                            )}
+                                          >
+                                            <Briefcase className="w-4 h-4 flex-shrink-0" />
+                                            <span className="truncate flex-1 min-w-0">{jobRole.title}</span>
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onVisualizeEntity('jobrole', jobRole);
+                                            }}
+                                            className="p-2 text-slate-400 hover:text-amber-400 hover:bg-slate-600 rounded-lg transition-colors flex-shrink-0"
+                                            title="Visualize relationships"
+                                          >
+                                            <NetworkIcon className="w-4 h-4" />
+                                          </button>
+                                        </div>
                                       ))
                                     )}
                                   </motion.div>

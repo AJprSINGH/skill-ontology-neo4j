@@ -14,7 +14,7 @@ import { usePropertyBasedSearch, useShortestPath } from '@/hooks/useApi';
 import { queryApi } from '@/services/api';
 
 export default function Home() {
-  // Navigation state
+  // Navigation statesetShowGraphVisualization(false);
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [selectedJobRole, setSelectedJobRole] = useState<string | null>(null);
@@ -55,9 +55,18 @@ export default function Home() {
   const handleEntitySelect = async (type: 'industry' | 'department' | 'jobrole' | 'skill', entity: any) => {
     setSelectedEntity(entity);
     setSelectedEntityType(type);
-    setIsEntityDrawerOpen(true);
+    // Don't automatically open entity drawer or show graph visualization
+    // Reset UI states whenever a new menu item is clicked
+  setShowGraphVisualization(false);
+  setShowSearchResults(false);
+  setIsEntityDrawerOpen(false);
+  };
 
-    // Automatically visualize relationships when an entity is selected
+  const handleVisualizeEntity = async (type: 'industry' | 'department' | 'jobrole' | 'skill', entity: any) => {
+    setSelectedEntity(entity);
+    setSelectedEntityType(type);
+    setShowGraphVisualization(true);
+
     try {
       let relationships;
 
@@ -69,7 +78,6 @@ export default function Home() {
       } else {
         relationships = await queryApi.getEntityRelationships(type, entity.id);
       }
-
 
       // Transform the relationships data to graph format
       const nodes = [
@@ -95,7 +103,6 @@ export default function Home() {
       }));
 
       setGraphData({ nodes, edges });
-      setShowGraphVisualization(true);
     } catch (error) {
       console.error('Error visualizing entity relationships:', error);
       // Fallback to simple visualization
@@ -106,7 +113,6 @@ export default function Home() {
       const edges: any[] = [];
 
       setGraphData({ nodes, edges });
-      setShowGraphVisualization(true);
     }
   };
 
@@ -222,8 +228,8 @@ export default function Home() {
   const handleViewRelationships = () => {
     if (selectedEntity) {
       handleVisualizeGraph(selectedEntity);
+      setIsEntityDrawerOpen(true);
     }
-    setIsEntityDrawerOpen(true);
   };
 
   const handleIndustrySelect = (industryId: string) => {
@@ -255,6 +261,7 @@ export default function Home() {
         onDepartmentSelect={handleDepartmentSelect}
         onJobRoleSelect={handleJobRoleSelectLocal}
         onEntitySelect={handleEntitySelect}
+        onVisualizeEntity={handleVisualizeEntity}
       />
 
       {/* Main Content Area */}
