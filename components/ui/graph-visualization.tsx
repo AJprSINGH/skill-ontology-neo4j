@@ -413,6 +413,7 @@ import {
   ZoomOut,
   RotateCcw,
   Maximize2,
+  Minimize2,
   Download,
   Settings,
   Eye,
@@ -708,6 +709,10 @@ export function GraphVisualization({
     setIsFullscreen(!isFullscreen);
   };
 
+  const handleExitFullscreen = () => {
+    setIsFullscreen(false);
+  };
+
   const handleDownload = () => {
     if (cyRef.current) {
       const png = cyRef.current.png({
@@ -813,11 +818,28 @@ export function GraphVisualization({
           <div
             ref={containerRef}
             className={cn(
-              "border rounded-lg bg-gray-50",
+              "border rounded-lg bg-gray-50 relative",
               isFullscreen ? "fixed inset-0 z-50 rounded-none" : ""
             )}
             style={{ height: isFullscreen ? '100vh' : height }}
           >
+            {/* Exit Fullscreen Button (only visible in fullscreen mode) */}
+            {isFullscreen && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="absolute top-4 right-4 z-50"
+              >
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleExitFullscreen}
+                  className="bg-white/90 hover:bg-white shadow-md"
+                >
+                  Exit Fullscreen
+                </Button>
+              </motion.div>
+            )}
             {isLoading && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
                 <div className="text-center">
@@ -833,7 +855,10 @@ export function GraphVisualization({
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-4 space-y-4 min-w-[200px]"
+              className={cn(
+                "absolute bg-white rounded-lg shadow-lg p-4 space-y-4 min-w-[200px]",
+                isFullscreen ? "top-4 right-4" : "top-4 right-4"
+              )}
             >
               {/* Zoom Controls */}
               <div className="space-y-2">
@@ -848,8 +873,8 @@ export function GraphVisualization({
                   <Button size="sm" variant="outline" onClick={handleRelayout}>
                     <RotateCcw className="w-3 h-3" />
                   </Button>
-                  <Button size="sm" variant="outline" onClick={handleFullscreen}>
-                    <Maximize2 className="w-3 h-3" />
+                  <Button size="sm" variant="outline" onClick={isFullscreen ? handleExitFullscreen : handleFullscreen}>
+                    {isFullscreen ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
                   </Button>
                   <Button size="sm" variant="outline" onClick={handleDownload}>
                     <Download className="w-3 h-3" />
