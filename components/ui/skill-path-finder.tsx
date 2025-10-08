@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Route, Brain, ArrowRight, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,11 @@ import { SearchResult, PathNode } from '@/types';
 
 const RESULTS_PER_PAGE = 3;
 
-export function SkillPathFinder() {
+interface SkillPathFinderProps {
+  onPathFind?: (sourceId: string, targetId: string) => void;
+}
+
+export function SkillPathFinder({ onPathFind }: SkillPathFinderProps) {
   const [fromSkill, setFromSkill] = useState<SearchResult | null>(null);
   const [toSkill, setToSkill] = useState<SearchResult | null>(null);
   const [fromQuery, setFromQuery] = useState('');
@@ -31,6 +35,13 @@ export function SkillPathFinder() {
     toSkill?.id || null,
     'skill'
   );
+
+  // Call onPathFind when path data becomes available
+  useEffect(() => {
+    if (pathData && pathData.path && pathData.path.length > 0 && onPathFind) {
+      onPathFind(fromSkill?.id || '', toSkill?.id || '');
+    }
+  }, [pathData, fromSkill?.id, toSkill?.id, onPathFind]);
 
   // Pagination for search results
   const paginatedFromResults = fromResults.slice(

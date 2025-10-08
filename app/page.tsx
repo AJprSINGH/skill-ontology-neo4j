@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MainContent } from '@/components/layout/MainContent';
@@ -53,6 +53,29 @@ export default function Home() {
     pathfindingTarget,
     'skill'
   );
+
+  // Handle shortest path data when it becomes available
+  useEffect(() => {
+    if (shortestPath && shortestPath.path && shortestPath.path.length > 0) {
+      const pathNodes = shortestPath.path.map((node, index) => ({
+        id: node.id,
+        label: node.title,
+        type: node.type,
+        color: index === 0 ? '#10B981' : index === shortestPath.path.length - 1 ? '#EF4444' : '#8B5CF6'
+      }));
+
+      const pathEdges = shortestPath.path.slice(0, -1).map((node, index) => ({
+        id: `path-${index}`,
+        source: node.id,
+        target: shortestPath.path[index + 1].id,
+        label: 'path'
+      }));
+
+      setPathData({ nodes: pathNodes, edges: pathEdges });
+      setShowPath(true);
+      setShowGraphVisualization(true);
+    }
+  }, [shortestPath]);
 
   const handleEntitySelect = async (type: 'industry' | 'department' | 'jobrole' | 'skill', entity: any) => {
     setSelectedEntity(entity);
@@ -201,30 +224,43 @@ export default function Home() {
     return colors[type as keyof typeof colors] || '#6B7280';
   };
 
-  const handlePathFind = (sourceId: string, targetId: string) => {
+  const handlePathFind = async (sourceId: string, targetId: string) => {
     console.log(`🔍 Finding shortest path from ${sourceId} to ${targetId}`);
     setPathfindingSource(sourceId);
     setPathfindingTarget(targetId);
 
-    // When path is found, create path data for child visualization
-    if (shortestPath && shortestPath.path.length > 0) {
-      const pathNodes = shortestPath.path.map((node, index) => ({
-        id: node.id,
-        label: node.title,
-        type: node.type,
-        color: index === 0 ? '#10B981' : index === shortestPath.path.length - 1 ? '#EF4444' : '#8B5CF6'
-      }));
+    // Wait for the shortest path query to complete
+    try {
+      // This will trigger the useShortestPath hook to fetch the path
+      // We need to wait for the data to be available
+      // Since React Query doesn't provide a direct way to await the query,
+      // we'll use a small delay and check for the result
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Check if shortestPath is available and has a valid path
+      if (shortestPath && shortestPath.path && shortestPath.path.length > 0) {
+        const pathNodes = shortestPath.path.map((node, index) => ({
+          id: node.id,
+          label: node.title,
+          type: node.type,
+          color: index === 0 ? '#10B981' : index === shortestPath.path.length - 1 ? '#EF4444' : '#8B5CF6'
+        }));
 
-      const pathEdges = shortestPath.path.slice(0, -1).map((node, index) => ({
-        id: `path-${index}`,
-        source: node.id,
-        target: shortestPath.path[index + 1].id,
-        label: 'path'
-      }));
+        const pathEdges = shortestPath.path.slice(0, -1).map((node, index) => ({
+          id: `path-${index}`,
+          source: node.id,
+          target: shortestPath.path[index + 1].id,
+          label: 'path'
+        }));
 
-      setPathData({ nodes: pathNodes, edges: pathEdges });
-      setShowPath(true);
-      setShowGraphVisualization(true);
+        setPathData({ nodes: pathNodes, edges: pathEdges });
+        setShowPath(true);
+        setShowGraphVisualization(true);
+      } else {
+        console.warn('No shortest path found or path is empty');
+      }
+    } catch (error) {
+      console.error('Error processing shortest path:', error);
     }
   };
 
@@ -313,7 +349,7 @@ export default function Home() {
             </div>
 
             <div className="space-y-6">
-              <SkillPathFinder />
+              <SkillPathFinder onPathFind={handlePathFind} />
 
               {(showSearchResults || showGraphVisualization) && (
                 <div className="flex gap-2">
