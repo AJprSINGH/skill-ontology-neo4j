@@ -21,23 +21,25 @@ import {
   SkillPath
 } from '@/types';
 const getUrlParameter = (name: string): string | null => {
-  // Use window.location.search to get the query string
-  const urlParams = new URLSearchParams(window.location.search);
-  const value = urlParams.get(name);
+  // 💡 FIX: Check if 'window' is defined before accessing browser APIs
+  if (typeof window !== 'undefined') {
+    const urlParams = new URLSearchParams(window.location.search);
+    const value = urlParams.get(name);
 
-  // Return the value, or null if it's not present or empty
-  return value && value.trim() !== '' ? value.trim() : null;
+    // Return the value, or null if it's not present or empty
+    return value && value.trim() !== '' ? value.trim() : null;
+  }
+  // Return null during server-side rendering
+  return null;
 };
-
-// Get the sub_institute_id from the URL, or default to '3'
-const parsedSubInstituteId = getUrlParameter('sub_institute_id') || '3';
-console.log(`Using SUB_INSTITUTE_ID: ${parsedSubInstituteId} (from URL or default)`);
+const initialSubInstituteId = getUrlParameter('sub_institute_id') || '3';
+console.log(`ℹ️ Initial SUB_INSTITUTE_ID (used for all initial requests): ${initialSubInstituteId}`);
 
 // API Configuration
 const API_CONFIG = {
   BASE_URL: 'https://hp.triz.co.in/api',
   TOKEN: '1078|LFXrQZWcwl5wl9lhhC5EyFNDvKLPHxF9NogOmtW652502ae5',
-  SUB_INSTITUTE_ID: parsedSubInstituteId,
+  SUB_INSTITUTE_ID: initialSubInstituteId,
   TIMEOUT: 30000, // 30 seconds
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000, // 1 second
