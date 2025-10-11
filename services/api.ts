@@ -20,12 +20,24 @@ import {
   SearchResult,
   SkillPath
 } from '@/types';
+const getUrlParameter = (name: string): string | null => {
+  // Use window.location.search to get the query string
+  const urlParams = new URLSearchParams(window.location.search);
+  const value = urlParams.get(name);
+
+  // Return the value, or null if it's not present or empty
+  return value && value.trim() !== '' ? value.trim() : null;
+};
+
+// Get the sub_institute_id from the URL, or default to '3'
+const parsedSubInstituteId = getUrlParameter('sub_institute_id') || '3';
+console.log(`Using SUB_INSTITUTE_ID: ${parsedSubInstituteId} (from URL or default)`);
 
 // API Configuration
 const API_CONFIG = {
   BASE_URL: 'https://hp.triz.co.in/api',
   TOKEN: '1078|LFXrQZWcwl5wl9lhhC5EyFNDvKLPHxF9NogOmtW652502ae5',
-  SUB_INSTITUTE_ID: '3',
+  SUB_INSTITUTE_ID: parsedSubInstituteId,
   TIMEOUT: 30000, // 30 seconds
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000, // 1 second
